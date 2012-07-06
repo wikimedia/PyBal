@@ -38,6 +38,7 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toQuery = self._getConfigInt('timeout', self.TIMEOUT_QUERY)
         self.hostnames = self._getConfigStringList('hostnames')
+        self.failOnNXDOMAIN = self._getConfigBool('fail-on-NXDOMAIN', False)
         
         self.resolver = None
         self.checkCall = None
@@ -113,9 +114,11 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         elif failure.check(error.DNSServerError):
             errorStr = "DNS server error" + queryStr
         elif failure.check(error.DNSNameError):
-            self.report("DNS server reports NXDOMAIN" + queryStr)
-            self._resultUp()
-            return None
+            errorStr = "DNS server reports NXDOMAIN" + queryStr
+            if not self.failOnNXDOMAIN:
+                self.report(errorStr)
+                self._resultUp()
+                return None
         elif failure.check(error.DNSQueryRefusedError):
             errorStr = "DNS query refused" + queryStr
         else:
