@@ -16,9 +16,6 @@ from twisted.python import failure
 from twisted.internet import reactor, defer
 from twisted.names import client, dns
 
-# TODO: make more dynamic
-from pybal.monitors import *
-
 try:
     from pybal import bgp
 except ImportError:
@@ -195,12 +192,11 @@ class Server:
         else:                
             for monitorname in monitorlist:
                 try:
-                    # FIXME: this is a hack?
-                    monitormodule = getattr(sys.modules['pybal.monitors'], monitorname.lower())
-                    monitorclass = getattr(monitormodule , monitorname + 'MonitoringProtocol' )
+                    monitormodule = getattr(__import__('pybal.monitors', fromlist=[monitorname.lower()], level=0), monitorname.lower())
                 except AttributeError:
                     print "Monitor", monitorname, "does not exist."
                 else:
+                    monitorclass = getattr(monitormodule, monitorname + 'MonitoringProtocol')
                     monitor = monitorclass(coordinator, self, lvsservice.configuration)
                     self.addMonitor(monitor)
                     monitor.run()
