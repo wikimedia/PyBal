@@ -38,7 +38,7 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toQuery = self._getConfigInt('timeout', self.TIMEOUT_QUERY)
         self.hostnames = self._getConfigStringList('hostnames')
-        self.failOnNXDOMAIN = self._getConfigBool('fail-on-NXDOMAIN', False)
+        self.failOnNXDOMAIN = self._getConfigBool('fail-on-nxdomain', False)
         
         self.resolver = None
         self.checkCall = None
