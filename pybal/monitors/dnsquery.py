@@ -13,12 +13,12 @@ from twisted.python import runtime
 
 import random, socket
 
-class DNSMonitoringProtocol(monitor.MonitoringProtocol):
+class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
     """
     Monitor that checks a DNS server by doing repeated DNS queries
     """
     
-    __name__ = 'DNS'
+    __name__ = 'DNSQuery'
     
     INTV_CHECK = 10
     TIMEOUT_QUERY = 5
@@ -33,7 +33,7 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
         """Constructor"""
 
         # Call ancestor constructor        
-        super(DNSMonitoringProtocol, self).__init__(coordinator, server, configuration)
+        super(DNSQueryMonitoringProtocol, self).__init__(coordinator, server, configuration)
 
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toQuery = self._getConfigInt('timeout', self.TIMEOUT_QUERY)
@@ -47,7 +47,7 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
     def run(self):
         """Start the monitoring""" 
         
-        super(DNSMonitoringProtocol, self).run()
+        super(DNSQueryMonitoringProtocol, self).run()
         
         # Create a resolver
         self.resolver = client.createResolver([(self.server.ip, 53)])
@@ -57,7 +57,7 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
     
     def stop(self):
         """Stop the monitoring"""
-        super(DNSMonitoringProtocol, self).stop()
+        super(DNSQueryMonitoringProtocol, self).stop()
 
         if self.checkCall and self.checkCall.active():
             self.checkCall.cancel()
