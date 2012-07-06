@@ -77,8 +77,9 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
         elif query.type == dns.AAAA:
             self.DNSQueryDeferred = self.resolver.lookupIPV6Address(hostname, timeout=[self.toQuery])
             
-        self.DNSQueryDeferred.addCallbacks(self._querySuccessful, self._queryFailed, callbackArgs=[query]
-                                          ).addBoth(self._checkFinished)
+        self.DNSQueryDeferred.addCallback(self._querySuccessful, query
+                ).addErrback(self._queryFailed, query
+                ).addBoth(self._checkFinished)
 
     
     def _querySuccessful(self, (answers, authority, additional), query):
@@ -99,16 +100,28 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
         
         return answers, authority, additional
     
-    def _queryFailed(self, failure):
+    def _queryFailed(self, failure, query):
         """Called when the DNS query finished with a failure."""        
 
         # Don't act as if the check failed if we cancelled it
         if failure.check([defer.CancelledError]):
             return None
-                
+        elif failure.check([error.DNSQueryTimeoutError]):
+            errorStr = "DNS query timeout"
+        elif failure.check([error.DNSServerError]):
+            errorStr = "DNS server error"
+        elif failure.check([error.DNSNameError]):
+            self.report("DNS server reports %s NXDOMAIN" % query.name)
+            self.resultUp()
+            return None
+        elif failure.check([error.DNSQueryRefusedError]):
+            errorStr = "DNS query refused"
+        else:
+            errorStr = str(failure)
+                         
         self.report('DNS query failed, %.3f s' % (runtime.seconds() - self.checkStartTime))
     
-        self._resultDown(failure.getErrorMessage())
+        self._resultDown(errorStr)
         
         failure.trap(*self.catchList)
 
