@@ -103,19 +103,21 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
     def _queryFailed(self, failure, query):
         """Called when the DNS query finished with a failure."""        
 
+        queryStr = ", query: %s %s" % (query.name, dns.QUERY_TYPES[query.type])
+
         # Don't act as if the check failed if we cancelled it
         if failure.check(defer.CancelledError):
             return None
         elif failure.check(error.DNSQueryTimeoutError):
-            errorStr = "DNS query timeout"
+            errorStr = "DNS query timeout" + queryStr
         elif failure.check(error.DNSServerError):
-            errorStr = "DNS server error"
+            errorStr = "DNS server error" + queryStr
         elif failure.check(error.DNSNameError):
-            self.report("DNS server reports %s NXDOMAIN" % query.name)
+            self.report("DNS server reports NXDOMAIN" + queryStr)
             self._resultUp()
             return None
         elif failure.check(error.DNSQueryRefusedError):
-            errorStr = "DNS query refused"
+            errorStr = "DNS query refused" + queryStr
         else:
             errorStr = str(failure)
                          
