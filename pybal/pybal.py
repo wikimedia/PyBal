@@ -205,7 +205,7 @@ class Server:
         """AND quantification of monitor.up over all monitoring instances of a single Server"""
         
         # Global status is up iff all monitors report up
-        return reduce(lambda b,monitor: b and monitor.up, self.monitors, len(self.monitors) == 0)
+        return reduce(lambda b,monitor: b and monitor.up, self.monitors, len(self.monitors) != 0)
     
     def calcPartialStatus(self):
         """OR quantification of monitor.up over all monitoring instances of a single Server"""
