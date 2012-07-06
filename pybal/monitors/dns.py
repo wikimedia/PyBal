@@ -89,12 +89,12 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
             addresses = " ".join([socket.inet_ntop(addressFamily, r.payload.address)
                                   for r in answers
                                   if r.name == query.name and r.type == query.type])
-            resultStr = "%s %s %s" % (query.name, dns.QUERY_TYPES(query.type), addresses)
+            resultStr = "%s %s %s" % (query.name, dns.QUERY_TYPES[query.type], addresses)
         else:
             resultStr = None
         
         self.report('DNS query successful, %.3f s' % (runtime.seconds() - self.checkStartTime)
-                    + (resultStr and (' ' + resultStr) or ""))
+                    + (resultStr and (': ' + resultStr) or ""))
         self._resultUp()
         
         return answers, authority, additional
