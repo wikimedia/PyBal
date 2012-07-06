@@ -7,8 +7,8 @@ DNS Monitor class implementation for PyBal
 
 from pybal import monitor
 
-from twisted.internet import reactor, defer, error
-from twisted.names import client, dns
+from twisted.internet import reactor, defer
+from twisted.names import client, dns, error
 from twisted.python import runtime
 
 import random, socket
@@ -23,7 +23,10 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
     INTV_CHECK = 10
     TIMEOUT_QUERY = 5
     
-    catchList = ( defer.TimeoutError, error.DNSLookupError )
+    catchList = (defer.TimeoutError, error.DomainError,
+                 error.AuthoritativeDomainError, error.DNSFormatError, error.DNSNameError,
+                 error.DNSQueryRefusedError, error.DNSQueryTimeoutError,
+                 error.DNSServerError, error.DNSUnknownError)
 
     
     def __init__(self, coordinator, server, configuration):
@@ -34,7 +37,7 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
 
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toQuery = self._getConfigInt('timeout', self.TIMEOUT_QUERY)
-        self.hostnames = self._getConfigStringList('hostname')
+        self.hostnames = self._getConfigStringList('hostnames')
         
         self.resolver = None
         self.checkCall = None
@@ -65,16 +68,16 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
         """Periodically called method that does a single uptime check."""
 
         hostname = random.choice(self.hostnames)
-        query = dns.Query(hostname, ':' in hostname and dns.AAAA or dns.A)
+        query = dns.Query(hostname, type=random.choice([dns.A, dns.AAAA]))
 
         self.checkStartTime = runtime.seconds()
         
         if query.type == dns.A:
-            self.DNSQueryDeferred = self.resolver.lookupAddress(hostname, timeout=self.toQuery)
+            self.DNSQueryDeferred = self.resolver.lookupAddress(hostname, timeout=[self.toQuery])
         elif query.type == dns.AAAA:
-            self.DNSQueryDeferred = self.resolver.lookupIPV6Address(hostname, timeout=self.toQuery)
+            self.DNSQueryDeferred = self.resolver.lookupIPV6Address(hostname, timeout=[self.toQuery])
             
-        self.DNSQueryDeferred.addCallback(self._querySuccessful, self._queryFailed, callbackArgs=query
+        self.DNSQueryDeferred.addCallbacks(self._querySuccessful, self._queryFailed, callbackArgs=[query]
                                           ).addBoth(self._checkFinished)
 
     
@@ -83,14 +86,15 @@ class DNSMonitoringProtocol(monitor.MonitoringProtocol):
         
         if query.type in (dns.A, dns.AAAA):
             addressFamily = query.type == dns.A and socket.AF_INET or socket.AF_INET6
-            resultStr = " ".join([socket.inet_ntop(addressFamily, r.payload.address)
+            addresses = " ".join([socket.inet_ntop(addressFamily, r.payload.address)
                                   for r in answers
                                   if r.name == query.name and r.type == query.type])
+            resultStr = "%s %s %s" % (query.name, dns.QUERY_TYPES(query.type), addresses)
         else:
             resultStr = None
         
         self.report('DNS query successful, %.3f s' % (runtime.seconds() - self.checkStartTime)
-                    + resultStr and '(result: %s)' % resultStr or "")
+                    + (resultStr and (' ' + resultStr) or ""))
         self._resultUp()
         
         return answers, authority, additional
