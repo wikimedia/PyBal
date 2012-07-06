@@ -114,7 +114,7 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         elif failure.check(error.DNSServerError):
             errorStr = "DNS server error" + queryStr
         elif failure.check(error.DNSNameError):
-            errorStr = "%s NXDOMAIN"
+            errorStr = "%s NXDOMAIN" % query.name
             if not self.failOnNXDOMAIN:
                 self.report(errorStr)
                 self._resultUp()
