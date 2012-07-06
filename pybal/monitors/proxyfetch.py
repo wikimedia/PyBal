@@ -95,7 +95,7 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         """Called when getProxyPage finished with a failure."""        
 
         # Don't act as if the check failed if we cancelled it
-        if failure.check([defer.CancelledError]):
+        if failure.check(defer.CancelledError):
             return None
                 
         self.report('Fetch failed, %.3f s' % (seconds() - self.checkStartTime))
