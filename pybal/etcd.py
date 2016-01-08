@@ -65,7 +65,7 @@ class EtcdClient(HTTPClient):
         else:
             try:
                 config = json.loads(response)
-            except Exception as e:
+            except Exception:
                 self.factory.onFailure(failure.Failure())
             else:
                 self.factory.onUpdate(config, self.etcdIndex)
