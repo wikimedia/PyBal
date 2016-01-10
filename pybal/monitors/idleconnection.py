@@ -10,7 +10,6 @@ from pybal import monitor
 from twisted.internet import reactor, protocol
 import logging
 
-import random
 import socket
 
 
@@ -130,9 +129,4 @@ class IdleConnectionMonitoringProtocol(monitor.MonitoringProtocol, protocol.Reco
     def _connect(self, *args, **kwargs):
         """Starts a TCP connection attempt"""
 
-        try:
-            host = random.choice(self.server.ip4_addresses)
-        except (TypeError, IndexError):
-            host = self.server.host
-
-        self.reactor.connectTCP(host, self.server.port, self, *args, **kwargs)
+        self.reactor.connectTCP(self.server.ip, self.server.port, self, *args, **kwargs)

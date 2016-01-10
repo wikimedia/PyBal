@@ -10,7 +10,7 @@ from pybal import monitor, util
 from twisted.internet import reactor, defer
 from twisted.web import client
 from twisted.python.runtime import seconds
-import logging
+import logging, random
 
 log = util.log
 
@@ -96,16 +96,13 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         # FIXME: Use GET as a workaround for a Twisted bug with HEAD/Content-length
         # where it expects a body and throws a PartialDownload failure
 
-        import random
         url = random.choice(self.URL)
-        try:
-            host = random.choice(self.server.ip4_addresses)
-        except (TypeError, IndexError):
-            host = self.server.host
 
         self.checkStartTime = seconds()
         self.getPageDeferred = self.getProxyPage(
-            url, method='GET', host=host,
+            url,
+            method='GET',
+            host=self.server.ip,
             port=self.server.port,
             status=self.expectedStatus,
             timeout=self.toGET,
