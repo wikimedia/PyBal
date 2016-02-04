@@ -6,8 +6,9 @@
   This module contains tests for `pybal.config`.
 
 """
-import mock
 import json
+import mock
+
 
 import pybal
 import pybal.config

@@ -70,10 +70,10 @@ class EtcdClient(HTTPClient):
         else:
             try:
                 config = json.loads(response)
+                self.factory.onUpdate(config, self.etcdIndex)
             except Exception:
                 self.factory.onFailure(failure.Failure())
-            else:
-                self.factory.onUpdate(config, self.etcdIndex)
+
         self.transport.loseConnection()
 
     def handleHeader(self, key, val):

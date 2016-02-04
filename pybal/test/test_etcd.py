@@ -8,6 +8,7 @@
 """
 
 import copy
+import json
 import mock
 import urlparse
 
@@ -15,7 +16,6 @@ import pybal
 import pybal.config
 import pybal.etcd
 from .fixtures import PyBalTestCase
-
 
 
 class EtcdConfigurationObserverTestCase(PyBalTestCase):
@@ -133,3 +133,51 @@ class EtcdConfigurationObserverTestCase(PyBalTestCase):
         self.observer.coordinator.onConfigUpdate.assert_called_with(
             {'2': {'enabled': True, u'weight': 10}}
         )
+
+
+class EtcdClientTestCase(PyBalTestCase):
+
+    def setUp(self):
+        super(EtcdClientTestCase, self).setUp()
+        self.protocol = pybal.etcd.EtcdClient()
+        # mock factory
+        self.protocol.factory = pybal.etcd.EtcdConfigurationObserver(
+            self.coordinator,
+            'etcd://example.com/config/text'
+        )
+        self.protocol.factory.onFailure =  mock.MagicMock()
+        # mock transport
+        self.protocol.transport = mock.MagicMock()
+        self.protocol.transport.loseConnection = mock.MagicMock()
+
+    def testHandleStatus(self):
+        self.protocol.handleStatus('1.1', '200', 'OK')
+        self.assertEquals(self.protocol.status, '200')
+        self.assertEquals(self.protocol.version, '1.1')
+        self.assertEquals(self.protocol.message, 'OK')
+
+    def testHandleResponse(self):
+        # Test failures
+        for status, resp in [
+                ('404', ''), # Bad status
+                ('200', '{Not Valid'), # non-json response
+                ('200', '{"key": true}') # invalid json
+        ]:
+            # Bad Status
+            self.protocol.handleStatus('1.1', status, 'OK')
+            self.protocol.handleResponse(resp)
+            assert self.protocol.factory.onFailure.called
+            # We definitely want to call loseConnection
+            # if a failure happens, that will instantiate a
+            # new connection to etcd
+            assert self.protocol.transport.loseConnection.called
+            self.protocol.factory.onFailure.reset_mock()
+            self.protocol.transport.loseConnection.reset_mock()
+
+        # Test happy path!
+        resp = """
+{"action":"get","node":{"dir":true,"nodes":[{"key":"/testdir","dir":true,"nodes":[{"key":"/testdir/1","value":"a","modifiedIndex":5,"createdIndex":5}],"modifiedIndex":4,"createdIndex":4}]}}"""
+        self.protocol.factory.onUpdate = mock.MagicMock()
+        self.protocol.handleStatus('1.1', '200', 'OK')
+        self.protocol.handleResponse(resp)
+        self.protocol.factory.onUpdate.assert_called_with(json.loads(resp), 0)
