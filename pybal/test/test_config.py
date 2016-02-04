@@ -6,15 +6,12 @@
   This module contains tests for `pybal.config`.
 
 """
-import json
-import os
-import tempfile
-
-from twisted.python.failure import Failure
 import mock
+import json
 
 import pybal
 import pybal.config
+import pybal.etcd
 
 from .fixtures import PyBalTestCase, MockClientGetPage
 

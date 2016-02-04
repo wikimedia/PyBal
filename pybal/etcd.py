@@ -25,8 +25,13 @@ from .util import log
 def decode_node(node):
     """Decode an individual node from an etcd response."""
     key = node['key'].rsplit('/', 1)[-1]
+    # handle deletions by returning the key and a value of None
+    if 'value' not in node:
+        return key, None
     value = json.loads(node['value'])
     pooled = value.pop('pooled', None)
+    if pooled == 'inactive':
+        return key, None
     if pooled is not None:
         value['enabled'] = pooled == 'yes'
     return key, value
@@ -141,7 +146,18 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
         else:
             self.waitIndex = etcdIdx + 1
         config = copy.deepcopy(self.lastConfig)
-        config.update(decode_etcd_data(update))
+
+        # Read new data
+        new_data = decode_etcd_data(update)
+        config.update(new_data)
+
+        # Remove deleted/inactive nodes
+        to_remove = [k for k, v in new_data.items() if v is None]
+        for k in to_remove:
+            if k in config:
+                del config[k]
+
+        # Now update pybal config
         if config != self.lastConfig:
             self.coordinator.onConfigUpdate(copy.deepcopy(config))
             self.lastConfig = config
