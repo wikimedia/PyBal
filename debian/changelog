@@ -1,3 +1,9 @@
+pybal (1.13.3) jessie-wikimedia; urgency=medium
+
+  * Allow the etcd driver to handle deleted/inactive nodes, more robustness
+
+ -- Giuseppe Lavagetto <glavagetto@wikimedia.org>  Fri, 05 Feb 2016 09:35:01 +0100
+
 pybal (1.13.2) jessie-wikimedia; urgency=medium
 
   * Fix a race condition in the alerting
