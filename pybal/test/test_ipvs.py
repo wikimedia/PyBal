@@ -10,6 +10,8 @@ import pybal.ipvs
 import pybal.util
 import pybal.bgpfailover
 
+from pybal.ipvs.ipvsadm import IPVSADMManager
+
 from .fixtures import PyBalTestCase, ServerStub
 
 
@@ -25,7 +27,7 @@ class IPVSManagerTestCase(PyBalTestCase):
             ('udp', '208.0.0.1', 123): '-u 208.0.0.1:123',
         }
         for service, expected_subcommand in services.items():
-            subcommand = pybal.ipvs.IPVSManager.subCommandService(service)
+            subcommand = IPVSADMManager.subCommandService(service)
             self.assertEquals(subcommand, expected_subcommand)
 
     def testSubCommandServer(self):
@@ -35,12 +37,12 @@ class IPVSManagerTestCase(PyBalTestCase):
             ServerStub('localhost', '127.0.0.1'): '-r 127.0.0.1',
         }
         for server, expected_subcommand in servers.items():
-            subcommand = pybal.ipvs.IPVSManager.subCommandServer(server)
+            subcommand = IPVSADMManager.subCommandServer(server)
             self.assertEquals(subcommand, expected_subcommand)
 
     def testCommandClearServiceTable(self):
         """Test `IPVSManager.commandClearServiceTable`."""
-        subcommand = pybal.ipvs.IPVSManager.commandClearServiceTable()
+        subcommand = IPVSADMManager.commandClearServiceTable()
         self.assertEquals(subcommand, '-C')
 
     def testCommandRemoveService(self):
@@ -50,7 +52,7 @@ class IPVSManagerTestCase(PyBalTestCase):
             ('udp', '208.0.0.1', 123): '-D -u 208.0.0.1:123',
         }
         for service, expected_subcommand in services.items():
-            subcommand = pybal.ipvs.IPVSManager.commandRemoveService(service)
+            subcommand = IPVSADMManager.commandRemoveService(service)
             self.assertEquals(subcommand, expected_subcommand)
 
     def testCommandAddService(self):
@@ -60,14 +62,14 @@ class IPVSManagerTestCase(PyBalTestCase):
             ('udp', '208.0.0.1', 123, 'rr'): '-A -u 208.0.0.1:123 -s rr',
         }
         for service, expected_subcommand in services.items():
-            subcommand = pybal.ipvs.IPVSManager.commandAddService(service)
+            subcommand = IPVSADMManager.commandAddService(service)
             self.assertEquals(subcommand, expected_subcommand)
 
     def testCommandRemoveServer(self):
         """Test `IPVSManager.commandRemoveServer`."""
         service = ('tcp', '2620::123', 443)
         server = ServerStub('localhost', None)
-        subcommand = pybal.ipvs.IPVSManager.commandRemoveServer(
+        subcommand = IPVSADMManager.commandRemoveServer(
             service, server)
         self.assertEquals(subcommand, '-d -t [2620::123]:443 -r localhost')
 
@@ -76,11 +78,11 @@ class IPVSManagerTestCase(PyBalTestCase):
         service = ('tcp', '2620::123', 443)
 
         server = ServerStub('localhost', None)
-        subcommand = pybal.ipvs.IPVSManager.commandAddServer(service, server)
+        subcommand = IPVSADMManager.commandAddServer(service, server)
         self.assertEquals(subcommand, '-a -t [2620::123]:443 -r localhost')
 
         server.weight = 25
-        subcommand = pybal.ipvs.IPVSManager.commandAddServer(service, server)
+        subcommand = IPVSADMManager.commandAddServer(service, server)
         self.assertEquals(
             subcommand, '-a -t [2620::123]:443 -r localhost -w 25')
 
@@ -89,11 +91,11 @@ class IPVSManagerTestCase(PyBalTestCase):
         service = ('tcp', '2620::123', 443)
 
         server = ServerStub('localhost', None)
-        subcommand = pybal.ipvs.IPVSManager.commandEditServer(service, server)
+        subcommand = IPVSADMManager.commandEditServer(service, server)
         self.assertEquals(subcommand, '-e -t [2620::123]:443 -r localhost')
 
         server.weight = 25
-        subcommand = pybal.ipvs.IPVSManager.commandEditServer(service, server)
+        subcommand = IPVSADMManager.commandEditServer(service, server)
         self.assertEquals(
             subcommand, '-e -t [2620::123]:443 -r localhost -w 25')
 
@@ -110,12 +112,12 @@ class LVSServiceTestCase(PyBalTestCase):
         def stubbedModifyState(cls, cmdList):
             cls.cmdList = cmdList
 
-        self.origModifyState = pybal.ipvs.IPVSManager.modifyState
-        setattr(pybal.ipvs.IPVSManager, 'modifyState',
+        self.origModifyState = IPVSADMManager.modifyState
+        setattr(IPVSADMManager, 'modifyState',
                 classmethod(stubbedModifyState))
 
     def tearDown(self):
-        pybal.ipvs.IPVSManager.modifyState = self.origModifyState
+        IPVSADMManager.modifyState = self.origModifyState
 
     def testConstructor(self):
         """Test `LVSService.__init__`."""
