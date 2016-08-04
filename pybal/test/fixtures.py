@@ -8,10 +8,16 @@
 """
 import unittest
 
+import mock
+
 import pybal.util
 import twisted.test.proto_helpers
 import twisted.trial.unittest
 from twisted.internet import defer
+
+from gnlpy import ipvs as netlink
+
+from pybal.ipvs import service, server
 
 
 class ServerStub(object):
@@ -31,6 +37,9 @@ class ServerStub(object):
 
     def textStatus(self):
         return '...'
+
+    def __repr__(self):
+        return "ServerStub(%s)" % self.host
 
     def __hash__(self):
         return hash((self.host, self.ip, self.weight, self.port))
@@ -74,7 +83,6 @@ class StubLVSService(object):
         self.configuration = configuration
 
 
-
 class MockClientGetPage(object):
     def __init__(self, data):
         self.return_value = data
@@ -115,3 +123,42 @@ class PyBalTestCase(twisted.trial.unittest.TestCase):
         self.server = ServerStub(self.host, self.ip, self.port,
                                  lvsservice=self.lvsservice)
         self.reactor = twisted.test.proto_helpers.MemoryReactor()
+
+
+class IpvsTestCase(twisted.trial.unittest.TestCase):
+
+    def getMockClient(self):
+        c = mock.MagicMock(spec=netlink.IpvsClient)
+        return c
+
+    def getService(self):
+        # currentState will be overridden by the actual state
+        t = ('tcp', '192.168.1.1', 80)
+        s = service.Service(self.client, t)
+        s.currentState = s.states['present']
+        return s
+
+    def getServer(self, srv=None):
+        if srv is None:
+            srv = self.getLogicalServers()[0]
+        s = self.getService()
+        return server.Server(self.client, srv, s)
+
+    def getPool(self, dest_range=range(3)):
+        serv = service.Service(self.client, ('tcp', '192.168.1.1', 80))
+        dests = []
+        for i in dest_range:
+            d = netlink.Dest({'ip': '10.0.0.%d' % (i + 1), 'port': 80, 'weight': 10})
+            dests.append(d)
+        return {'service': serv, 'dests': dests}
+
+    def getLogicalServers(self):
+        s = [
+            ServerStub('www1.local', ip='10.0.0.1', port=80, weight=10),
+            ServerStub('www2.local', ip='10.0.0.2', port=80, weight=10),
+            ServerStub('www3.local', ip='10.0.0.3', port=80, weight=10)
+        ]
+        for srv in s:
+            srv.up = True
+            srv.pooled = True
+        return s

@@ -7,12 +7,12 @@
 # a deferred callback (which progresses the current state of the machine to S2)
 # or an errback (which does not progress the current states and gets us a Failure)
 #
+from __future__ import absolute_import
+
 from twisted.internet import defer
 from twisted.python import failure
 
-from pybal import util
-
-log = util.log
+from pybal.util import log
 
 
 class State(object):
@@ -46,7 +46,7 @@ class FiniteStateMachine(object):
         self.currentState = None
         self.isInTransition = False
 
-    def checkActualState(self):
+    def assertState(self):
         """
         This method is dumb in the base class, but could be overridden
         by state machines with side-effects to actually check the
@@ -56,7 +56,10 @@ class FiniteStateMachine(object):
         So e.g. say we set an IPVS server to be pooled, but some admin
         has manually removed it from the pool: its currentState according to
         our FSM will be 'pooled', while the actual state of the system will be
-        'depooled'
+        'depooled'.
+
+        The consequence of not passing the test can be chosen by the
+        developer, but should generally result in an exception being raised.
         """
         pass
 
@@ -95,7 +98,7 @@ class FiniteStateMachine(object):
 
     def _toState(self, state_name):
         # Check the FSM is in a consistent state
-        self.checkActualState()
+        self.assertState()
         self.isInTransition = True
         state = self._getState(state_name)
         if state == self.currentState:

@@ -98,7 +98,7 @@ def main():
             configdict.update(cliconfig)
 
             if section != 'global':
-                services[section] = ipvs.LVSService(section, cfgtuple, configuration=configdict)
+                services[section] = ipvs.get_service(section, cfgtuple, configdict)
                 crd = Coordinator(services[section],
                     configUrl=config.get(section, 'config'))
                 log.info("Created LVS service '{}'".format(section))
