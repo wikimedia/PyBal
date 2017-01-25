@@ -9,6 +9,8 @@ LVS Squid balancer/monitor for managing the Wikimedia Squid servers using LVS
 
 from __future__ import absolute_import
 
+from ConfigParser import SafeConfigParser
+
 import os, sys, signal, socket, random
 import logging
 from pybal import ipvs, util, config, etcd, instrumentation
@@ -540,6 +542,8 @@ def parseCommandLine(configuration):
         description="Load Balancer manager script.",
         epilog="See <https://wikitech.wikimedia.org/wiki/PyBal> for more."
     )
+    parser.add_argument("-c", dest="conffile", help="Configuration file",
+                        default="/etc/pybal/pybal.conf")
     parser.add_argument("-n", "--dryrun", action="store_true",
                         help="Dry Run mode, do not actually update.")
     parser.add_argument("-d", "--debug", action="store_true",
@@ -575,18 +579,14 @@ def installSignalHandlers():
 
 
 def main():
-    from ConfigParser import SafeConfigParser
-
-    # Read the configuration file
-    configFile = '/etc/pybal/pybal.conf'
-
-    config = SafeConfigParser()
-    config.read(configFile)
-
     services, cliconfig = {}, {}
 
     # Parse the command line
     parseCommandLine(cliconfig)
+
+    # Read the configuration file
+    config = SafeConfigParser()
+    config.read(cliconfig['conffile'])
 
     try:
         # Install signal handlers

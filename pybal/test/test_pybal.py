@@ -20,7 +20,8 @@ class TestBaseUtils(PyBalTestCase):
         config = {}
         with mock.patch.object(sys, 'argv', testargs):
             parseCommandLine(config)
-            self.assertEquals(config, {'debug': True, 'dryrun': True})
+            self.assertEquals(config, {'debug': True, 'dryrun': True,
+                                       'conffile': '/etc/pybal/pybal.conf'})
         testargs.append('--badarg')
         # Bad argument exits with code 2
         with mock.patch.object(sys, 'argv', testargs):
