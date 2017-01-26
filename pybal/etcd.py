@@ -67,12 +67,15 @@ class EtcdClient(HTTPClient):
         if self.status != '200':
             err = error.Error(self.status, self.message, response)
             self.factory.onFailure(failure.Failure(err))
-        else:
+        elif response is not None and len(response):
             try:
                 config = json.loads(response)
                 self.factory.onUpdate(config, self.etcdIndex)
-            except Exception:
-                self.factory.onFailure(failure.Failure())
+            except Exception, err:
+                msg = "Error: %s Etcd response: %s" % (err, response)
+                self.factory.onFailure(msg)
+        else:
+            log.warn("etcd: empty response from server")
 
         self.transport.loseConnection()
 
