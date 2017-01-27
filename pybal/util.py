@@ -4,9 +4,11 @@ Copyright (C) 2006-2008 by Mark Bergsma <mark@nedworks.org>
 
 LVS Squid balancer/monitor for managing the Wikimedia Squid servers using LVS
 """
+import os
 import sys
 from twisted.python import log as tw_log
 from twisted.python import util
+import inspect
 import logging
 
 
@@ -109,7 +111,14 @@ class Logger(object):
     def _genLogger(self, lvl):
         def _log(msg, **kwargs):
             level = Logger._to_str(lvl)
-            sys = kwargs.get('system', 'pybal')
+            # If system has not been specified, default to caller function
+            # module name (eg: pybal, etcd) for logs with severity WARN or
+            # higher
+            if 'system' not in kwargs and lvl >= logging.WARN:
+                sys = os.path.basename(inspect.stack(0)[1][1]).replace('.py', '')
+            else:
+                sys = kwargs.get('system', 'pybal')
+
             message = "%s: %s" % (level, msg)
             tw_log.msg(message, logLevel=lvl, system=sys)
         return _log
