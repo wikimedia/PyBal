@@ -101,6 +101,10 @@ class MonitoringProtocolTestCase(PyBalTestCase):
         self.assertEquals(
             self.monitor._getConfigStringList('strListValue'), ['abc', 'def'])
 
+        self.config['testmonitor.unicodeListValue'] = '["abc", u"def"]'
+        self.assertEquals(
+            self.monitor._getConfigStringList('unicodeListValue'), ['abc', 'def'])
+
         self.config['testmonitor.badStrListValue'] = '["abc", 123]'
         with self.assertRaises(ValueError):
             self.monitor._getConfigStringList('badStrListValue')

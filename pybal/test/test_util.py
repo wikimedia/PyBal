@@ -146,7 +146,7 @@ class PyBalLogObserverTestCase(PyBalTestCase):
         self.log.debug("test_message")
         self.assertEquals([], self.obs.write.mock_calls)
         self.log.error("test_message2")
-        self.obs.write.assert_called_with('[pybal] ERROR: test_message2\n')
+        self.obs.write.assert_called_with('[test_util] ERROR: test_message2\n')
         self.obs.level = logging.DEBUG
         self.fd.write.reset_mock()
         self.log.debug("test_message3")

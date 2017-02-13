@@ -1,3 +1,10 @@
+pybal (1.13.5) jessie-wikimedia; urgency=medium
+
+  * pybal.monitor.MonitoringProtocol: do not crash with ValueError on unicode
+    strings
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Mon, 13 Feb 2017 15:29:04 +0100
+
 pybal (1.13.4) jessie-wikimedia; urgency=medium
 
   * Allow to specify configuration file name on the CLI (-c)
