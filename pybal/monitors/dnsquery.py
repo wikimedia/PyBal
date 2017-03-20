@@ -82,7 +82,7 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         self.DNSQueryDeferred.addCallback(self._querySuccessful, query
                 ).addErrback(self._queryFailed, query
                 ).addBoth(self._checkFinished)
-
+        return self.DNSQueryDeferred
 
     def _querySuccessful(self, (answers, authority, additional), query):
         """Called when the DNS query finished successfully."""
