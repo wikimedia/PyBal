@@ -1,3 +1,26 @@
+pybal (1.13.5) jessie-wikimedia; urgency=medium
+
+  * pybal.monitor.MonitoringProtocol: do not crash with ValueError on unicode
+    strings
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Mon, 13 Feb 2017 15:29:04 +0100
+
+pybal (1.13.4) jessie-wikimedia; urgency=medium
+
+  * Allow to specify configuration file name on the CLI (-c)
+  * Log a warning on empty responses from etcd
+  * Use caller function module name as log prefix (eg: pybal, etcd) for logs
+    with severity WARN or higher
+  * Log etcd connection state changes (made/failed/lost)
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Thu, 26 Jan 2017 09:48:27 +0100
+
+pybal (1.13.3) jessie-wikimedia; urgency=medium
+
+  * Allow the etcd driver to handle deleted/inactive nodes, more robustness
+
+ -- Giuseppe Lavagetto <glavagetto@wikimedia.org>  Fri, 05 Feb 2016 09:35:01 +0100
+
 pybal (1.13.2) jessie-wikimedia; urgency=medium
 
   * Fix a race condition in the alerting

@@ -98,7 +98,7 @@ class MonitoringProtocol(object):
         if type(val) == str:
             return val
         elif (isinstance(val, list) and
-              all(isinstance(x, str) for x in val) and val):
+              all(isinstance(x, basestring) for x in val) and val):
             # Checked that each list member is a string and that list is not
             # empty.
             return val

@@ -17,6 +17,7 @@ from twisted.python import failure
 from twisted.web import error
 from twisted.web.client import HTTPClientFactory
 from twisted.web.http import HTTPClient, urlparse
+from twisted.internet.error import ConnectionDone
 
 from .config import ConfigurationObserver
 from .version import USER_AGENT_STRING
@@ -53,6 +54,8 @@ class EtcdClient(HTTPClient):
     etcdIndex = 0
 
     def connectionMade(self):
+        log.info("connected to %s" % self.factory.configUrl, system="config-etcd")
+
         self.sendCommand('GET', self.factory.getPath())
         self.sendHeader('Host', self.factory.host)
         self.sendHeader('User-Agent', self.factory.agent)
@@ -64,15 +67,20 @@ class EtcdClient(HTTPClient):
         self.message = message
 
     def handleResponse(self, response):
+        log.debug("%s response: %s" % (self.status, response), system="config-etcd")
+
         if self.status != '200':
             err = error.Error(self.status, self.message, response)
             self.factory.onFailure(failure.Failure(err))
-        else:
+        elif response is not None and len(response):
             try:
                 config = json.loads(response)
                 self.factory.onUpdate(config, self.etcdIndex)
-            except Exception:
-                self.factory.onFailure(failure.Failure())
+            except Exception, err:
+                msg = "Error: %s Etcd response: %s" % (err, response)
+                self.factory.onFailure(msg)
+        else:
+            log.warn("empty response from server", system="config-etcd")
 
         self.transport.loseConnection()
 
@@ -109,7 +117,7 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
         self.lastConfig = {}
 
     def startObserving(self):
-        """Start (or re-start) watching the configuration file for changes."""
+        """Start (or re-start) watching etcd for changes."""
         reactor.connectSSL(self.host, self.port, self,
                            ssl.ClientContextFactory())
 
@@ -127,9 +135,16 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
         return path
 
     def clientConnectionFailed(self, connector, reason):
+        log.error("client connection failed: reason=%s" % reason, system="config-etcd")
         connector.connect()
 
-    def clientConnectionLost(self, connector, unused_reason):
+    def clientConnectionLost(self, connector, reason):
+        r = reason.trap(ConnectionDone)
+        if r == ConnectionDone:
+            log.info("client connection closed cleanly", system="config-etcd")
+        else:
+            log.error("client connection lost: reason=%s" % reason, system="config-etcd")
+
         connector.connect()
 
     def getMaxModifiedIndex(self, root):
@@ -163,4 +178,4 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
             self.lastConfig = config
 
     def onFailure(self, reason):
-        log.error('failed: %s' % reason)
+        log.error('failed: %s' % reason, system="config-etcd")
