@@ -636,9 +636,18 @@ def main():
         # Run the web server for instrumentation
         if configdict.getboolean('instrumentation', False):
             from twisted.web.server import Site
-            port = configdict.getint('instrumentation_port', 9090)
             factory = Site(instrumentation.ServerRoot())
-            reactor.listenTCP(port, factory)
+
+            port = configdict.getint('instrumentation_port', 9090)
+
+            # Bind on the IPs listed in 'instrumentation_ips'. Default to
+            # localhost v4 and v6 if no IPs have been specified in the
+            # configuration.
+            instrumentation_ips = eval(configdict.get(
+                'instrumentation_ips', '["127.0.0.1", "::1"]'))
+
+            for ipaddr in instrumentation_ips:
+                reactor.listenTCP(port, factory, interface=ipaddr)
 
         reactor.run()
     finally:

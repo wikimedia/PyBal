@@ -20,9 +20,13 @@ import json
 
 
 def wantJson(request):
-    return (request.requestHeaders.hasHeader('Accept')
-            and 'application/json' in
-            request.requestHeaders.getRawHeaders('Accept'))
+    if (request.requestHeaders.hasHeader('Accept')
+        and 'application/json' in request.requestHeaders.getRawHeaders('Accept')):
+        request.responseHeaders.addRawHeader(b"content-type", b"application/json")
+        return True
+    else:
+        request.responseHeaders.addRawHeader(b"content-type", b"text/plain")
+        return False
 
 
 class Resp404(Resource):
@@ -31,7 +35,7 @@ class Resp404(Resource):
     def render_GET(self, request):
         request.setResponseCode(404)
         msg = {'error':
-               "The desired url {} was not found".format(request.uri)}
+               "The desired url was not found"}
         if wantJson(request):
             return json.dumps(msg)
         else:
