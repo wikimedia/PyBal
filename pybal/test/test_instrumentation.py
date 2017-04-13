@@ -184,8 +184,9 @@ class SiteTest(WebBaseTestCase):
 
     def test_404(self):
         """Test case for an non-existent base url"""
-        hdr, _ = self._httpReq(uri='/test')
+        hdr, body = self._httpReq(uri='/test')
         self.assertTrue(hdr.startswith('HTTP/1.1 404 Not Found'))
+        self.assertEquals(body, 'The desired url was not found')
 
     def test_pool(self):
         """Test case for requesting a specific pool"""
@@ -209,6 +210,17 @@ class SiteTest(WebBaseTestCase):
         """Test case for an non-existent host"""
         hdr, _ = self._httpReq(uri='/pools/test_pool0/mw1011')
         self.assertTrue(hdr.startswith('HTTP/1.1 404 Not Found'))
+
+    def test_content_type_text_plain(self):
+        hdr, _ = self._httpReq(uri='/pools/test_pool0')
+        self.assertTrue(hdr.startswith('HTTP/1.1 200 OK'))
+        self.assertTrue("Content-Type: text/plain" in hdr)
+
+    def test_content_type_application_json(self):
+        hdr, _ = self._httpReq(uri='/pools/test_pool0',
+                               headers={'Accept': 'application/json'})
+        self.assertTrue(hdr.startswith('HTTP/1.1 200 OK'))
+        self.assertTrue("Content-Type: application/json" in hdr)
 
     def tearDown(self):
         self.proto.connectionLost(Failure(TypeError("whatever")))
