@@ -1,3 +1,10 @@
+pybal (1.13.6) jessie-wikimedia; urgency=medium
+
+  * Change the default behavior for LVS services from not being announced via
+    BGP to be announced
+
+ -- Alexandros Kosiaris <alex@wikimedia.org>  Fri, 12 May 2017 14:00:21 +0300
+
 pybal (1.13.5) jessie-wikimedia; urgency=medium
 
   * pybal.monitor.MonitoringProtocol: do not crash with ValueError on unicode
