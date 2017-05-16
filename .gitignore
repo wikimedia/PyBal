@@ -5,3 +5,7 @@ pybal.egg-info
 _trial_temp
 build
 dist
+.project
+.pydevproject
+.settings
+.python-version
