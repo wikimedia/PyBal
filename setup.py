@@ -15,7 +15,7 @@ except ImportError:
 
 setup(
     name='PyBal',
-    version='1.12',
+    version='1.13',
     license='GPLv2+',
     author='Mark Bergsma',
     author_email='mark@wikimedia.org',
