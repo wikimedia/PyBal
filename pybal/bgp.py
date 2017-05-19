@@ -1349,7 +1349,103 @@ class FSM(object):
             self.protocol.closeConnection()
         # Remove from connections list
         if self.bgpPeering: self.bgpPeering.connectionClosed(self.protocol)
-    
+
+class BGPMessage(object):
+    msgtype = None
+    msgLenOffset = 16
+
+    def __init__(self):
+        self.msg = (bytearray(HDR_LEN), )
+        self.constructHeader()
+
+    def __repr__(self):
+        msgType = {
+            MSG_OPEN: "OPEN",
+            MSG_UPDATE: "UPDATE",
+            MSG_NOTIFICATION: "NOTIFICATION",
+            MSG_KEEPALIVE: "KEEPALIVE",
+
+        }.get(self.msgtype, "Invalid")
+        return "<BGP %s, len %d>" % (msgType, len(self))
+
+    def __str__(self):
+        return "".join([str(part) for part in self.msg])
+
+    def __len__(self):
+        return sum([len(part) for part in self.msg])
+
+    def __getitem__(self, i):
+        return buffer(self.msg[i])
+
+    @staticmethod
+    def prependHeader(message, type):
+        """Prepends the mandatory header to a constructed BGP message"""
+
+        return struct.pack('!16sHB',
+                           chr(255)*16,
+                           len(message)+HDR_LEN,
+                           type) + message
+
+    def constructHeader(self, buffer=None):
+        struct.pack_into('!16sHB', (buffer or self.msg[0]), 0,
+            chr(255)*16,
+            len(self),
+            self.msgtype)
+
+    def _append(self, buf, data, lenOffset=None):
+        """
+        Appends variable records (e.g. NLRI, attributes) and updates
+        the variable length and total message size.
+        """
+
+        newSize = len(self) + len(data)
+        if newSize <= MAX_LEN:
+            buf.extend(data)
+            if lenOffset:
+                struct.pack_into('!H', buf, lenOffset, len(buf) - lenOffset - 2)
+            struct.pack_into('!H', self.msg[0], self.msgLenOffset, newSize)
+        else:
+            raise ValueError("New message size %s would exceed MAX_LEN %d" %
+                (newSize, MAX_LEN))
+
+class BGPUpdateMessage(BGPMessage):
+    msgtype = MSG_UPDATE
+
+    def __init__(self):
+        super(BGPUpdateMessage, self).__init__()
+        self.msg = (self.msg[0], bytearray(2), bytearray(2), bytearray())
+        self.withdrCount, self.attrCount, self.nlriCount = 0, 0, 0
+
+    def __repr__(self):
+        return (super(BGPUpdateMessage, self).__repr__()[:-1]
+            + ", [%d:%d] withdrawals" % (self.withdrCount, len(self.msg[1]))
+            + ", [%d:%d] attributes" % (self.attrCount, len(self.msg[2]))
+            + ", [%d:%d] NLRI>" % (self.nlriCount, len(self.msg[3])))
+
+
+    def addWithdrawals(self, withdrawals):
+        """
+        Incrementally adds withdrawals to the UPDATE message.
+        Does not attempt to remove duplicates.
+        """
+        self._append(self.msg[1], BGP.encodePrefixes(withdrawals))
+        self.withdrCount += len(withdrawals)
+
+    def addAttributes(self, attributes):
+        """
+        Incrementally adds NLRI attributes to the UPDATE message.
+        """
+
+        self._append(self.msg[2], BGP.encodeAttributes(attributes))
+        self.attrCount += len(attributes)
+
+    def addNLRI(self, nlri):
+        """
+        Incrementally adds NLRI to the UPDATE message.
+        """
+
+        self._append(self.msg[3], BGP.encodePrefixes(nlri))
+        self.nlriCount += len(nlri)
 
 class BGP(protocol.Protocol):
     """Protocol class for BGP 4"""
@@ -1451,14 +1547,6 @@ class BGP(protocol.Protocol):
 
         self.transport.write(self.constructNotification(error, suberror, data))
 
-    def constructHeader(self, message, type):
-        """Prepends the mandatory header to a constructed BGP message"""
-
-        return struct.pack('!16sHB',
-                           chr(255)*16,
-                           len(message)+19,
-                           type) + message
-
     def constructOpen(self):
         """Constructs a BGP Open message"""
 
@@ -1473,7 +1561,7 @@ class BGP(protocol.Protocol):
                           self.fsm.holdTime,
                           self.factory.bgpId) + optParams
 
-        return self.constructHeader(msg, MSG_OPEN)
+        return BGPMessage.prependHeader(msg, MSG_OPEN)
 
     def constructUpdate(self, withdrawnPrefixes, attributes, nlri):
         """Constructs a BGP Update message"""
@@ -1488,18 +1576,18 @@ class BGP(protocol.Protocol):
                + attributesData
                + nlriData)
 
-        return self.constructHeader(msg, MSG_UPDATE)
+        return BGPMessage.prependHeader(msg, MSG_UPDATE)
 
     def constructKeepAlive(self):
         """Constructs a BGP KeepAlive message"""
 
-        return self.constructHeader('', MSG_KEEPALIVE)
+        return BGPMessage.prependHeader('', MSG_KEEPALIVE)
 
     def constructNotification(self, error, suberror=0, data=''):
         """Constructs a BGP Notification message"""
 
         msg = struct.pack('!BB', error, suberror) + data
-        return self.constructHeader(msg, MSG_NOTIFICATION)
+        return BGPMessage.prependHeader(msg, MSG_NOTIFICATION)
 
     def constructOpenOptionalParameters(self, parameters):
         """Constructs the OptionalParameters fields of a BGP Open message"""
