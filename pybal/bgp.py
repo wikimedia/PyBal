@@ -694,6 +694,25 @@ class BaseMPAttribute(Attribute):
         except BGPException:
             raise AttributeException(ERR_MSG_UPDATE_OPTIONAL_ATTR, attrTuple)
 
+    def addSomePrefixes(self, prefixSet, maxLen):
+        """
+        Add as many prefixes from prefixSet as will fit within maxLen,
+        removing added prefixes from prefixSet.
+        Returns the number of prefixes added.
+        """
+        # FIXME: Optimize to prevent double encoding
+
+        bArray = bytearray()
+        origPrefixSet = frozenset(prefixSet)
+        count = BGP.encodeSomePrefixes(
+            prefixSet=prefixSet,
+            bArray=bArray,
+            offset=0,
+            maxLen=maxLen)
+        self.value = self.value[0:-1] + (list(origPrefixSet - prefixSet), )
+        return count
+
+
     @staticmethod
     def afiStr(afi, safi):
         return ({
@@ -786,7 +805,7 @@ class MPUnreachNLRIAttribute(BaseMPAttribute):
 
     def encode(self):
         afi, safi, nlri = self.value
-        encodedNLRI = BGP.encoddePrefixes(nlri)
+        encodedNLRI = BGP.encodedPrefixes(nlri)
         length = 3 + len(encodedNLRI)
 
         return struct.pack('!BBHHB', self.flags(), self.typeCode, length, afi, safi) + encodedNLRI
@@ -1392,7 +1411,28 @@ class BGPMessage(object):
             len(self),
             self.msgtype)
 
-    def _append(self, buf, data, lenOffset=None):
+    def freeSpace(self):
+        """
+        Returns the available free space in the packet
+        """
+        return MAX_LEN - len(self)
+
+    def _updateRecordLen(self, buf, offset=None, length=None):
+        """
+        Updates the length of the variable length field at the given
+        offset in the provided buffer
+        """
+
+        struct.pack_into('!H', buf, offset, length)
+
+    def _updateMsgLen(self):
+        """
+        Updates the length of the message in the message header
+        """
+
+        struct.pack_into('!H', self.msg[0], self.msgLenOffset, len(self))
+
+    def _appendAll(self, buf, data, lenOffset=None):
         """
         Appends variable records (e.g. NLRI, attributes) and updates
         the variable length and total message size.
@@ -1401,9 +1441,9 @@ class BGPMessage(object):
         newSize = len(self) + len(data)
         if newSize <= MAX_LEN:
             buf.extend(data)
-            if lenOffset:
-                struct.pack_into('!H', buf, lenOffset, len(buf) - lenOffset - 2)
-            struct.pack_into('!H', self.msg[0], self.msgLenOffset, newSize)
+            if lenOffset is not None:
+                self._updateRecordLen(buf, lenOffset, len(buf) - lenOffset - 2)
+            self._updateMsgLen()
         else:
             raise ValueError("New message size %s would exceed MAX_LEN %d" %
                 (newSize, MAX_LEN))
@@ -1423,29 +1463,45 @@ class BGPUpdateMessage(BGPMessage):
             + ", [%d:%d] NLRI>" % (self.nlriCount, len(self.msg[3])))
 
 
-    def addWithdrawals(self, withdrawals):
+    def addSomeWithdrawals(self, withdrawalSet):
         """
-        Incrementally adds withdrawals to the UPDATE message.
-        Does not attempt to remove duplicates.
+        Incrementally adds as many withdrawals to the UPDATE message as will
+        fit in the remainder of the packet, removing added prefixes from the set
+        Returns the number of withdrawals added.
         """
-        self._append(self.msg[1], BGP.encodePrefixes(withdrawals))
-        self.withdrCount += len(withdrawals)
+        added = BGP.encodeSomePrefixes(
+            prefixSet=withdrawalSet,
+            bArray=self.msg[1],
+            offset=len(self.msg[1]),
+            maxLen=self.freeSpace())
+        self._updateRecordLen(self.msg[1], 0, len(self.msg[1]) - 2)
+        self._updateMsgLen()
+        self.withdrCount += added
+        return added
 
     def addAttributes(self, attributes):
         """
         Incrementally adds NLRI attributes to the UPDATE message.
         """
 
-        self._append(self.msg[2], BGP.encodeAttributes(attributes))
+        self._appendAll(self.msg[2], BGP.encodeAttributes(attributes), lenOffset=0)
         self.attrCount += len(attributes)
 
-    def addNLRI(self, nlri):
+    def addSomeNLRI(self, nlriSet):
         """
-        Incrementally adds NLRI to the UPDATE message.
+        Incrementally adds as many nlri to the UPDATE message as will
+        fit in the remainder of the packet, removing added prefixes from the set
+        Returns the number of nlri added.
         """
 
-        self._append(self.msg[3], BGP.encodePrefixes(nlri))
-        self.nlriCount += len(nlri)
+        added = BGP.encodeSomePrefixes(
+            prefixSet=nlriSet,
+            bArray=self.msg[3],
+            offset=len(self.msg[3]),
+            maxLen=self.freeSpace())
+        self._updateMsgLen()
+        self.nlriCount += added
+        return added
 
 class BGP(protocol.Protocol):
     """Protocol class for BGP 4"""
@@ -1546,6 +1602,17 @@ class BGP(protocol.Protocol):
         """
 
         self.transport.write(self.constructNotification(error, suberror, data))
+
+    def sendMessage(self, bgpMessage):
+        """
+        Sends a bgpMessage
+        """
+
+        # DEBUG
+        print "Sending BGP message:", repr(bgpMessage)
+
+        # FIXME: Twisted on Python 2 doesn't support bytearrays
+        self.transport.writeSequence(bytes(bgpMessage))
 
     def constructOpen(self):
         """Constructs a BGP Open message"""
@@ -1882,6 +1949,49 @@ class BGP(protocol.Protocol):
                 attrData += BGP.encodeAttribute(attr)
 
         return attrData
+
+    @staticmethod
+    def encodeSomePrefixes(prefixSet, bArray, offset, maxLen):
+        """
+        Encodes as many IPPrefix prefixes from set prefixSet as will fit
+        within maxLen. Removes prefixes from the set as they are added,
+        so leaves any remaining prefixes didn't fit.
+        Returns the number of prefixes added.
+        """
+
+        if not isinstance(prefixSet, set):
+            raise TypeError("prefixSet needs to be instance of set()")
+
+        bytesWritten = 0
+        prefixesAdded = 0
+        while True:
+            try:
+                prefix = prefixSet.pop()
+            except KeyError:
+                # Set is empty
+                break
+            else:
+                octetLen, remainder = len(prefix) / 8, len(prefix) % 8
+                if remainder > 0:
+                    # prefix length doesn't fall on octet boundary
+                    octetLen += 1
+                if maxLen - bytesWritten >= octetLen + 1:
+                    if len(bArray) - offset - bytesWritten < octetLen + 1:
+                        # Make space
+                        bArray.extend(b'\0' * (octetLen + 1
+                            - (len(bArray) - offset- bytesWritten)))
+                    struct.pack_into(
+                        ("!B%ds" % octetLen),
+                        bArray, (offset + bytesWritten),
+                        len(prefix), prefix.packed()[:octetLen])
+                    bytesWritten += (octetLen+1)
+                    prefixesAdded += 1
+                else:
+                    # We didn't have space, put the prefix back
+                    prefixSet.add(prefix)
+                    break
+
+        return prefixesAdded
 
     @staticmethod
     def encodePrefixes(prefixes):
@@ -2254,9 +2364,8 @@ class BGPPeering(BGPFactory):
 
 class NaiveBGPPeering(BGPPeering):
     """
-    "Naive" class managing a simple BGP session with very few announced prefixes.
-    Currently even assumes that all prefixes fit in a single BGP UPDATE message.
-    DO NOT USE this for more than a couple prefixes.
+    "Naive" class managing a simple BGP session, not optimized for very many
+    announced prefixes.
     """
 
     def __init__(self, myASN=None, peerAddr=None):
@@ -2326,66 +2435,118 @@ class NaiveBGPPeering(BGPPeering):
 
         # Process per (AFI, SAFI) pair
         for af in set(withdrawals.keys() + updates.keys()):
+            withdrawals.setdefault(af, set())
+            updates.setdefault(af, set())
+
             # Map equal attributes to advertisements
             attributeMap = {}
             for advertisement in updates[af]:
                 attributeMap.setdefault(advertisement.attributes, set()).add(advertisement)
 
-            # NLRI for address families other than inet unicast should
-            # get sent in MP Reach NLRI and MP Unreach NLRI attributes
-            attributeMap = self._moveToMPAttributes(af, attributeMap, withdrawals)
-
             # Send
-            for attributes, advertisements in attributeMap.iteritems():
-                self._sendUpdate(withdrawals.get(af, set()), attributes, advertisements)
-
-                if af in withdrawals:
-                    withdrawals[af] = set() # Only send withdrawals once
+            if af == (AFI_INET, SAFI_UNICAST):
+                self._sendInetUnicastUpdates(withdrawals[af], attributeMap)
+            else:
+                # NLRI for address families other than inet unicast should
+                # get sent in MP Reach NLRI and MP Unreach NLRI attributes
+                self._sendMPUpdates(af, withdrawals[af], attributeMap)
 
             self.advertised[af] = self.toAdvertise[af]
 
-    def _moveToMPAttributes(self, addressfamily, attributeMap, withdrawals):
+    def _sendInetUnicastUpdates(self, withdrawals, attributeMap):
         """
-        Move NLRI for address families other than inet unicast out of
-        the normal updates/withdrawals sets, and (re)construct MPReachNLRI/
-        MPUnreachNLRI for them.
+        Sends (multiple) UPDATE messages for the inet-unicast way,
+        i.e. the straightforward way.
+
+        Arguments:
+        - withdrawals: a set of advertisements to withdraw
+        - attributeMap: a dict of FrozenAttributeDict to updates sets
+        """
+
+        for attributes, advertisements in attributeMap.iteritems():
+            withdrawalPrefixSet = set([w.prefix for w in withdrawals])
+            adPrefixSet = set([ad.prefix for ad in advertisements])
+
+            # Start with withdrawals, if there are any
+            while len(withdrawals) > 0:
+                bgpupdate = BGPUpdateMessage()
+                prefixesAdded = bgpupdate.addSomeWithdrawals(withdrawalPrefixSet)
+                if prefixesAdded == 0:
+                    raise ValueError("Could not add any withdrawals")
+                self.estabProtocol.sendMessage(bgpupdate)
+
+            # Start with a clean slate, RFC4760 forbids sending the same
+            # prefix in withdrawals and any NLRI or MPReachNLRI/MPUnreachNLRI
+            while len(adPrefixSet) > 0:
+                bgpupdate = BGPUpdateMessage()
+                # For inet-unicast, we need to add the complete set of
+                # attributes to every packet.
+                try:
+                    bgpupdate.addAttributes(attributes)
+                except ValueError:
+                    # Too many attributes to fit an empty packet. That's a
+                    # problem we can't solve.
+                    raise
+                else:
+                    prefixesAdded = bgpupdate.addSomeNLRI(adPrefixSet)
+                    if prefixesAdded == 0:
+                        raise ValueError("Could not add any NLRI prefixes")
+                    self.estabProtocol.sendMessage(bgpupdate)
+
+    def _sendMPUpdates(self, addressfamily, withdrawals, attributeMap):
+        """
+        Sends (multiple) UPDATE messages the RFC4760 way.
 
         Arguments:
         - addressfamily: (AFI, SAFI) tuple
-        - attributeMap: a dict of FrozenAttributeDict to updates sets
         - withdrawals: a set of advertisements to withdraw
-
-        Returns:
-        - a new address map (dict)
+        - attributeMap: a dict of FrozenAttributeDict to updates sets
         """
 
-        # Currently inet unicast advertisements are sent the old way
-        if addressfamily == (AFI_INET, SAFI_UNICAST):
-            return attributeMap
-
         afi, safi = addressfamily
-        newAttributeMap = {}
+
+        # Construct MPUnreachNLRI for withdrawals and send them
+
+        while len(withdrawals) > 0:
+            bgpupdate = BGPUpdateMessage()
+            unreachAttr = MPUnreachNLRIAttribute((afi, safi, []))
+            prefixesAdded = unreachAttr.addSomePrefixes(
+                prefixSet=set([w.prefix for w in withdrawals[addressfamily]]),
+                maxLen=bgpupdate.freeSpace())
+            if prefixesAdded == 0:
+                raise ValueError("Could not add any prefixes to MPUnreachNLRI attribute")
+            bgpupdate.addAttributes(FrozenAttributeDict(unreachAttr))
+            self.estabProtocol.sendMessage(bgpupdate)
+
+        # Move NLRI into MPReachNLRI attributes and send them
 
         for attributes, advertisements in attributeMap.iteritems():
-            newAttributes = AttributeDict(attributes)
+            newAttributes = AttributeDict(attributes)   # Shallow copy
+            # Filter existing MPReachNLRIAttribute from the existing map
             try:
-                newAttributes[MPReachNLRIAttribute].addPrefixes([ad.prefix for ad in advertisements])
+                origReachAttr = newAttributes.pop(MPReachNLRIAttribute)
             except KeyError:
                 raise ValueError("Missing MPReachNLRIAttribute")
 
-            # Only send withdrawals once
-            if len(withdrawals.get(addressfamily, set())) > 0:
-                newAttributes.add(MPUnreachNLRIAttribute((afi, safi,
-                    [w.prefix for w in withdrawals[addressfamily]])))
-                withdrawals[addressfamily].clear()
-
-            newAttributeMap[FrozenAttributeDict(newAttributes)] = set()
-
-        return newAttributeMap
-
-
-    def _sendUpdate(self, withdrawals, attributes, advertisements):
-        if (len(withdrawals) + len(advertisements) > 0
-            ) or (MPReachNLRIAttribute in attributes
-            ) or (MPUnreachNLRIAttribute in attributes):
-            self.estabProtocol.sendUpdate([w.prefix for w in withdrawals], attributes, [a.prefix for a in advertisements])
+            adPrefixSet = set([ad.prefix for ad in advertisements])
+            while len(adPrefixSet) > 0:
+                bgpupdate = BGPUpdateMessage()
+                # We need to add the complete set of attributes besides
+                # MPReachNLRI to every packet.
+                try:
+                    bgpupdate.addAttributes(newAttributes)
+                except ValueError:
+                    # Too many attributes to fit an empty packet. That's a
+                    # problem we can't solve.
+                    raise
+                else:
+                    # FIXME: MPReachNLRIAttribute.fromTuple(origReachAttr.tuple()) doesn't work
+                    # as tuple() returns a decoded tuple, not an encoded tuple. Attribute classes
+                    # overload self.value for both.
+                    reachAttr = MPReachNLRIAttribute(value=origReachAttr.tuple()[2])
+                    prefixesAdded = reachAttr.addSomePrefixes(
+                        adPrefixSet, maxLen=bgpupdate.freeSpace())
+                    if prefixesAdded == 0:
+                        raise ValueError("Could not add any prefixes to MPReachNLRI attribute")
+                    bgpupdate.addAttributes(FrozenAttributeDict([reachAttr]))
+                    self.estabProtocol.sendMessage(bgpupdate)
