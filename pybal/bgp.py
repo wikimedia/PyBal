@@ -1798,16 +1798,16 @@ class BGP(protocol.Protocol):
     def encodePrefixes(prefixes):
         """Encodes a list of IPPrefix"""
 
-        prefixData = ""
+        prefixData = bytearray()
         for prefix in prefixes:
             octetLen, remainder = len(prefix) / 8, len(prefix) % 8
             if remainder > 0:
                 # prefix length doesn't fall on octet boundary
                 octetLen += 1
 
-            prefixData += struct.pack('!B', len(prefix)) + prefix.packed()[:octetLen]
+            prefixData.extend(struct.pack('!B', len(prefix)) + prefix.packed()[:octetLen])
 
-        return prefixData
+        return bytes(prefixData)
 
 
 class BGPFactory(protocol.Factory):
