@@ -202,16 +202,16 @@ class IPPrefix(object):
                     raise ValueError()
             else:
                 # Assume prefix is a sequence of octets
-                self.prefix = "".join(map(chr, prefix))
+                self.prefix = b"".join(map(chr, prefix))
         elif type(ipprefix) is str:
             # textual form
             prefix, prefixlen = ipprefix.split('/')
             self.addressfamily = addressfamily or (':' in prefix and AFI_INET6 or AFI_INET)
 
             if self.addressfamily == AFI_INET:
-                self.prefix = "".join([chr(int(o)) for o in prefix.split('.')])
+                self.prefix = b"".join([chr(int(o)) for o in prefix.split('.')])
             elif self.addressfamily == AFI_INET6:
-                self.prefix = ""
+                self.prefix = bytearray()
                 hexlist = prefix.split(":")
                 if len(hexlist) > 8:
                     raise ValueError()
@@ -222,6 +222,7 @@ class IPPrefix(object):
                     else:
                         zeroCount = 8 - len(hexlist) + 1
                         self.prefix += struct.pack('!%dH' % zeroCount, *((0,) * zeroCount))
+                self.prefix = bytes(self.prefix)
 
             self.prefixlen = int(prefixlen)
         else:
