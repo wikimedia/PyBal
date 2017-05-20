@@ -1487,6 +1487,15 @@ class BGPUpdateMessage(BGPMessage):
         self._appendAll(self.msg[2], BGP.encodeAttributes(attributes), lenOffset=0)
         self.attrCount += len(attributes)
 
+    def clearAttributes(self):
+        """
+        Removes all previously added attributes from the packet.
+        """
+
+        del self.msg[2][2:]
+        self.msg[2][0:2] = 0, 0
+        self._updateMsgLen()
+
     def addSomeNLRI(self, nlriSet):
         """
         Incrementally adds as many nlri to the UPDATE message as will
@@ -2467,16 +2476,36 @@ class NaiveBGPPeering(BGPPeering):
             withdrawalPrefixSet = set([w.prefix for w in withdrawals])
             adPrefixSet = set([ad.prefix for ad in advertisements])
 
+            bgpupdate = BGPUpdateMessage()
             # Start with withdrawals, if there are any
             while len(withdrawals) > 0:
-                bgpupdate = BGPUpdateMessage()
                 prefixesAdded = bgpupdate.addSomeWithdrawals(withdrawalPrefixSet)
                 if prefixesAdded == 0:
                     raise ValueError("Could not add any withdrawals")
+                if len(withdrawals) > 0:
+                    # We overflowed the packet
+                    self.estabProtocol.sendMessage(bgpupdate)
+                    bgpupdate = BGPUpdateMessage()
+
+            # Attempt to add all attributes and (some) NLRI to the existing
+            # packet, to optimize for the common case of small updates.
+            # The same prefix SHOULD NOT be sent in both withdrawals
+            # and updated NLRI, but NaiveBGPPeering should have already
+            # taken care of that.
+            try:
+                bgpupdate.addAttributes(attributes)
+            except ValueError:
+                # Alas, didn't fit. Just send out.
+                self.estabProtocol.sendMessage(bgpupdate)
+            else:
+                prefixesAdded = bgpupdate.addSomeNLRI(adPrefixSet)
+                if prefixesAdded == 0:
+                    # Packet was full, no NLRI added. Nevermind, let's send
+                    # this one without attributes & NLRI.
+                    bgpupdate.clearAttributes()
                 self.estabProtocol.sendMessage(bgpupdate)
 
-            # Start with a clean slate, RFC4760 forbids sending the same
-            # prefix in withdrawals and any NLRI or MPReachNLRI/MPUnreachNLRI
+            # Start with a clean slate
             while len(adPrefixSet) > 0:
                 bgpupdate = BGPUpdateMessage()
                 # For inet-unicast, we need to add the complete set of
