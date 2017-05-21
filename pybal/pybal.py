@@ -27,7 +27,7 @@ except ImportError:
     inotify = None
 
 try:
-    from pybal import bgp
+    from pybal.bgp import bgp
 except ImportError:
     pass
 
