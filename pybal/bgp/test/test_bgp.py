@@ -9,8 +9,12 @@
 
 from .. import ip, bgp
 
-import unittest
+import unittest, mock
 
+from twisted.test import proto_helpers
+from twisted.python.failure import Failure
+from twisted.internet.error import ConnectionLost
+from twisted.internet.address import IPv4Address, IPv6Address
 
 class AttributeTestCase(unittest.TestCase):
 
@@ -81,3 +85,44 @@ class BGPUpdateMessageTestCase(unittest.TestCase):
 
     def testFreeSpace(self):
         self.assertEquals(self.msg.freeSpace(), bgp.MAX_LEN-len(self.msg))
+
+class BGPTestCase(unittest.TestCase):
+    def setUp(self):
+        self.factory = bgp.BGPPeering(myASN=64600, peerAddr='127.0.0.1')
+        # FIXME: Should configure this in a better way in bgp.FSM
+        self.factory.fsm.allowAutomaticStart = False
+        self.proto = self.factory.buildProtocol(IPv4Address('TCP', '127.0.0.1', 0))
+        self.proto.fsm.allowAutomaticStart = False
+        self.tr = proto_helpers.StringTransportWithDisconnection()
+        self.tr.protocol = self.proto
+        self.assertRaises(AttributeError, self.proto.makeConnection, self.tr)
+
+    def tearDown(self):
+        # The BGPPeering factory keeps its own separate FSM
+        self.factory.fsm.idleHoldTimer.cancel()
+        self.proto.fsm.idleHoldTimer.cancel()
+
+    def testConnectionLost(self):
+        failure = Failure(ConnectionLost("Unit test"))
+
+        with mock.patch.object(self.proto.fsm, 'connectionFailed') as mock_method:
+            self.proto.connectionLost(failure)
+            mock_method.assert_called()
+
+            mock_method.reset_mock()
+            self.proto.disconnected = True
+            self.proto.connectionLost(failure)
+            mock_method.assert_not_called()
+
+    def testDataReceived(self):
+        d = b"Unit testing data"
+        self.proto.dataReceived(d)
+        self.assertIn(d, self.proto.receiveBuffer)
+
+    def testCloseConnection(self):
+        with mock.patch.object(self.proto.fsm, 'connectionFailed') as mock_method:
+            self.tr.connected = True
+            self.proto.closeConnection()
+            self.assertTrue(self.proto.disconnected)
+            self.assertTrue(self.tr.disconnecting or not self.tr.connected)
+            mock_method.assert_called()
