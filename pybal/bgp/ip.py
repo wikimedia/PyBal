@@ -58,6 +58,12 @@ class IPPrefix(object):
                 self.prefix = b"".join([chr(int(o)) for o in prefix.split('.')])
             elif self.addressfamily == AFI_INET6:
                 self.prefix = bytearray()
+                # If prefix starts or ends with :: then .split() returns two
+                # empty strings
+                if prefix.startswith('::'):
+                    prefix = '0' + prefix
+                elif prefix.endswith('::'):
+                    prefix = prefix + '0'
                 hexlist = prefix.split(":")
                 if len(hexlist) > 8:
                     raise ValueError()
@@ -66,8 +72,7 @@ class IPPrefix(object):
                     if hexstr is not "":
                         self.prefix += struct.pack('!H', int(hexstr, 16))
                     else:
-                        zeroCount = 8 - len(hexlist) + 1
-                        self.prefix += struct.pack('!%dH' % zeroCount, *((0,) * zeroCount))
+                        self.prefix.extend('\0\0' * (8 - len(hexlist) + 1))
                 self.prefix = bytes(self.prefix)
 
             self.prefixlen = int(prefixlen)
@@ -130,7 +135,7 @@ class IPPrefix(object):
 
     def packed(self, pad=False):
         if pad:
-            return self.prefix + '\0' * (self._packedMaxLen() - len(self.prefix))
+            return self.prefix.ljust(self._packedMaxLen(), '\0')
         else:
             return self.prefix
 
