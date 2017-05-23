@@ -98,6 +98,17 @@ class IPPrefixTestCase(TestCase):
         self.assertEquals(len(prefix), 46)
         self.assertEquals(str(prefix), '2620:0:863:0:0:0:0:0/46')
 
+    def testPrefixUnicode(self):
+        prefix = ip.IPPrefix(u'192.168.1.2/24')
+        self.assertEquals(len(prefix), 24)
+        prefix.mask(len(prefix))
+        self.assertEquals(prefix, ip.IPPrefix('192.168.1.0/24'))
+
+    def testIPUnicode(self):
+        prefix = ip.IPv4IP(u'192.168.1.2')
+        self.assertEquals(len(prefix), 32)
+        prefix.mask(len(prefix))
+
     def testComparisons(self):
         p1, p2 = ip.IPPrefix('1.2.3.4/8'), ip.IPPrefix('1.2.3.4/16')
         self.assertNotEqual(p1, p2)

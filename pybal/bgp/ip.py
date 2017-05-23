@@ -37,7 +37,7 @@ class IPPrefix(object):
             self.addressfamily = addressfamily
 
             prefix, self.prefixlen = ipprefix
-            if type(prefix) is str:
+            if isinstance(prefix, basestring):
                 # tuple (ipstr, prefixlen)
                 self.prefix = prefix
             elif type(prefix) is int:
@@ -49,7 +49,7 @@ class IPPrefix(object):
             else:
                 # Assume prefix is a sequence of octets
                 self.prefix = b"".join(map(chr, prefix))
-        elif type(ipprefix) is str:
+        elif isinstance(ipprefix, basestring):
             # textual form
             prefix, prefixlen = ipprefix.split('/')
             self.addressfamily = addressfamily or (':' in prefix and AFI_INET6 or AFI_INET)
@@ -143,7 +143,7 @@ class IPv4IP(IPPrefix):
     """Class that represents a single non-prefix IPv4 IP."""
 
     def __init__(self, ip):
-        if type(ip) is str and len(ip) > 4:
+        if isinstance(ip, basestring) and len(ip) > 4:
             super(IPv4IP, self).__init__(ip + '/32', AFI_INET)
         else:
             super(IPv4IP, self).__init__((ip, 32), AFI_INET)
