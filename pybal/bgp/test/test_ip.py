@@ -74,9 +74,13 @@ class IPv6IPTestCase(TestCase):
         self.assertEquals(ip.IPv6IP('2620:0:862:ed1a::1').packed(pad=True),
             b'\x26\x20\0\0\x08\x62\xed\x1a\0\0\0\0\0\0\0\x01')
 
+    def testPackedInit(self):
+        self.assertEquals(str(ip.IPv6IP(packed=b'\xFF'*16)), ':'.join(['ffff']*8))
+
     def testValueError(self):
         with self.assertRaises(ValueError):
             ip.IPv6IP()
+        self.assertRaises(ValueError, ip.IPv6IP, '1:2:3:4:5:6:7:8:9')
 
 class IPPrefixTestCase(TestCase):
 
@@ -88,6 +92,7 @@ class IPPrefixTestCase(TestCase):
         self.assertEquals(len(prefix), 32)
         self.assertEquals(prefix, ip.IPv4IP('91.198.174.192'))
         self.assertEquals(str(prefix), '91.198.174.192/32')
+        self.assertEquals(repr(prefix), "'91.198.174.192/32'")
 
         prefix = ip.IPPrefix('192.168.1.2/24')
         self.assertEquals(len(prefix), 24)
@@ -108,6 +113,24 @@ class IPPrefixTestCase(TestCase):
         prefix = ip.IPv4IP(u'192.168.1.2')
         self.assertEquals(len(prefix), 32)
         prefix.mask(len(prefix))
+
+    def testIPPrefix(self):
+        p1 = ip.IPv4IP('192.0.2.66')
+        p2 = ip.IPPrefix(p1)
+        self.assertIsNot(p1, p2)
+        self.assertEquals(str(p2), '192.0.2.66/32')
+
+    def testIPTuple(self):
+        ipbstr = b'\x01\x02\x03\x04'
+        p = ip.IPPrefix((ipbstr, 32), addressfamily=ip.AFI_INET)
+        self.assertEquals(str(p), "1.2.3.4/32")
+        self.assertRaises(ValueError, ip.IPPrefix, (ipbstr, 32))
+
+        self.assertRaises(ValueError, ip.IPPrefix, (6666, 128), ip.AFI_INET6)
+
+    def testValueError(self):
+        self.assertRaises(ValueError, ip.IPPrefix, '1:2:3:4:5:6:7:8:9/128')
+        self.assertRaises(ValueError, ip.IPPrefix, None)
 
     def testComparisons(self):
         p1, p2 = ip.IPPrefix('1.2.3.4/8'), ip.IPPrefix('1.2.3.4/16')
