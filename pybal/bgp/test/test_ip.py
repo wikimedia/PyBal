@@ -6,7 +6,7 @@
   This module contains tests for `bgp.ip`.
 
 """
-import ip
+from .. import ip
 
 from unittest import TestCase
 

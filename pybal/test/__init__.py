@@ -13,3 +13,4 @@ from .test_ipvs import *
 from .test_monitor import *
 from .test_util import *
 from .test_instrumentation import *
+from ..bgp.test import *

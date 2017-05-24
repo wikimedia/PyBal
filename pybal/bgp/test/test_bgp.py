@@ -7,8 +7,7 @@
 
 """
 
-import ip
-import bgp
+from .. import ip, bgp
 
 import unittest
 
