@@ -29,6 +29,11 @@ class AttributeTestCase(unittest.TestCase):
         self.assertEquals(attr.value, [(2, [])])
 
 class BGPUpdateMessageTestCase(unittest.TestCase):
+    attrs = bgp.FrozenAttributeDict(
+                [bgp.OriginAttribute(),
+                bgp.ASPathAttribute([64600, 64601]),
+                bgp.NextHopAttribute("192.0.2.1"),
+                bgp.MEDAttribute(100)])
 
     def setUp(self):
         self.msg = bgp.BGPUpdateMessage()
@@ -36,12 +41,6 @@ class BGPUpdateMessageTestCase(unittest.TestCase):
         self.assertEquals(len(self.msg.msg), 4)
         self.assertEquals(len(self.msg), 23)
         self.assertIn("UPDATE", repr(self.msg))
-
-        self.attrs = bgp.FrozenAttributeDict(
-                    [bgp.OriginAttribute(),
-                    bgp.ASPathAttribute([64600, 64601]),
-                    bgp.NextHopAttribute("192.0.2.1"),
-                    bgp.MEDAttribute(100)])
 
     def testAddSomeWithdrawals(self):
         self.assertEquals(self.msg.addSomeWithdrawals(set()), 0)
@@ -91,6 +90,13 @@ class BGPTestCase(unittest.TestCase):
         self.factory = bgp.BGPPeering(myASN=64600, peerAddr='127.0.0.1')
         # FIXME: Should configure this in a better way in bgp.FSM
         self.factory.fsm.allowAutomaticStart = False
+
+        # FIXME: Make Factory param
+        af = [(bgp.AFI_INET, bgp.SAFI_UNICAST), (bgp.AFI_INET6, bgp.SAFI_UNICAST)]
+        self.factory.setEnabledAddressFamilies(af)
+        # FIXME: make Factory param
+        self.factory.bgpId = ip.IPv4IP('127.127.127.127').ipToInt()
+
         self.proto = self.factory.buildProtocol(IPv4Address('TCP', '127.0.0.1', 0))
         self.proto.fsm.allowAutomaticStart = False
         self.tr = proto_helpers.StringTransportWithDisconnection()
@@ -99,8 +105,10 @@ class BGPTestCase(unittest.TestCase):
 
     def tearDown(self):
         # The BGPPeering factory keeps its own separate FSM
-        self.factory.fsm.idleHoldTimer.cancel()
-        self.proto.fsm.idleHoldTimer.cancel()
+        for fsm in [self.factory.fsm, self.proto.fsm]:
+            for timer in (fsm.connectRetryTimer, fsm.holdTimer, fsm.keepAliveTimer,
+                          fsm.delayOpenTimer, fsm.idleHoldTimer):
+                timer.cancel()
 
     def testConnectionLost(self):
         failure = Failure(ConnectionLost("Unit test"))
@@ -126,3 +134,35 @@ class BGPTestCase(unittest.TestCase):
             self.assertTrue(self.proto.disconnected)
             self.assertTrue(self.tr.disconnecting or not self.tr.connected)
             mock_method.assert_called()
+
+    def testSendOpen(self):
+        self.proto.sendOpen()
+        self.assertEqual(self.tr.value(),
+            b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+            b'\x00+\x01\x04\xfcX\x00\xb4\x7f\x7f\x7f\x7f\x0e\x02\x0c\x01\x04' +
+            b'\x00\x01\x00\x01\x01\x04\x00\x02\x00\x01')
+
+    def testSendUpdate(self):
+        withdrawals = [ip.IPPrefix('192.168.99.0/24')]
+        nlri = [ip.IPPrefix('172.24.0.0/17')]
+
+        self.proto.sendUpdate(withdrawals, BGPUpdateMessageTestCase.attrs, nlri)
+        self.assertEqual(self.tr.value()[:19],
+            b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+            b'\x00:\x02')
+        self.assertEqual(len(self.tr.value()), 58)
+        # TODO: test prefix & attribute fields, cross test against BGPUpdateMessage
+
+    def testSendKeepAlive(self):
+        self.proto.sendKeepAlive()
+        self.assertEqual(self.tr.value(),
+            b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x13\x04')
+
+    def testSendNotification(self):
+        self.proto.sendNotification(
+            bgp.ERR_MSG_UPDATE,
+            bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH,
+            "Arbitrary data")
+        self.assertEqual(self.tr.value(),
+            b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+            b'\x00#\x03\x03\x0bArbitrary data')
