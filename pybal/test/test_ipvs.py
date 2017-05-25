@@ -8,7 +8,7 @@
 """
 import pybal.ipvs
 import pybal.util
-import pybal.pybal
+import pybal.bgpfailover
 
 from .fixtures import PyBalTestCase, ServerStub
 
@@ -105,7 +105,7 @@ class LVSServiceTestCase(PyBalTestCase):
         super(LVSServiceTestCase, self).setUp()
         self.config['dryrun'] = 'true'
         self.service = ('tcp', '127.0.0.1', 80, 'rr')
-        pybal.pybal.BGPFailover.prefixes.clear()
+        pybal.bgpfailover.BGPFailover.prefixes.clear()
 
         def stubbedModifyState(cls, cmdList):
             cls.cmdList = cmdList
@@ -129,7 +129,7 @@ class LVSServiceTestCase(PyBalTestCase):
 
         self.config['bgp'] = 'true'
         pybal.ipvs.LVSService('http', self.service, self.config)
-        self.assertItemsEqual(pybal.pybal.BGPFailover.prefixes, {(1, 1)})
+        self.assertItemsEqual(pybal.bgpfailover.BGPFailover.prefixes, {(1, 1)})
 
     def testService(self):
         """Test `LVSService.service`."""

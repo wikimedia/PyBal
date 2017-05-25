@@ -5,6 +5,7 @@ Copyright (C) 2006-2015 by Mark Bergsma <mark@nedworks.org>
 LVS state/configuration classes for PyBal
 """
 from . import util
+from pybal.bgpfailover import BGPFailover
 
 import os
 log = util.log
@@ -182,7 +183,6 @@ class LVSService:
         self.ipvsManager.Debug = configuration.getboolean('debug', False)
 
         if self.configuration.getboolean('bgp', True):
-            from pybal import BGPFailover
             # Add service ip to the BGP announcements
             BGPFailover.addPrefix(self.ip)
 

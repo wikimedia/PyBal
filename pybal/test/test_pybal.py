@@ -9,7 +9,7 @@
 import sys
 import mock
 from .fixtures import PyBalTestCase
-from pybal.pybal import parseCommandLine
+from pybal.main import parseCommandLine
 
 
 class TestBaseUtils(PyBalTestCase):

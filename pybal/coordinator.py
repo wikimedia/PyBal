@@ -2,34 +2,20 @@
 
 """
 PyBal
-Copyright (C) 2006-2014 by Mark Bergsma <mark@nedworks.org>
+Copyright (C) 2006-2017 by Mark Bergsma <mark@nedworks.org>
 
 LVS Squid balancer/monitor for managing the Wikimedia Squid servers using LVS
 """
+import random
+import socket
 
-from __future__ import absolute_import
-
-from ConfigParser import SafeConfigParser
-
-import os, sys, signal, socket, random
-import logging
-from pybal import ipvs, util, config, etcd, instrumentation
-
-from twisted.python import failure
-from twisted.internet import reactor, defer
+from twisted.internet import defer
 from twisted.names import client, dns
+from twisted.python import failure
+
+from pybal import config, util
 
 log = util.log
-
-try:
-    from twisted.internet import inotify
-except ImportError:
-    inotify = None
-
-try:
-    from pybal.bgp import bgp
-except ImportError:
-    pass
 
 
 class Server:
@@ -449,189 +435,3 @@ class Coordinator:
 
         # Assign the updated list of enabled servers to the LVSService instance
         self.assignServers()
-
-
-class BGPFailover:
-    """Class for maintaining a BGP session to a router for IP address failover"""
-
-    prefixes = {}
-    peerings = []
-
-    def __init__(self, globalConfig):
-        self.globalConfig = globalConfig
-
-        if self.globalConfig.getboolean('bgp', False):
-            self.setup()
-
-    def setup(self):
-        try:
-            self.bgpPeering = bgp.NaiveBGPPeering(myASN=self.globalConfig.getint('bgp-local-asn'),
-                                                  peerAddr=self.globalConfig.get('bgp-peer-address'))
-
-            asPath = [int(asn) for asn in self.globalConfig.get('bgp-as-path', str(self.bgpPeering.myASN)).split()]
-            med = self.globalConfig.getint('bgp-med', 0)
-            baseAttrs = [bgp.OriginAttribute(), bgp.ASPathAttribute(asPath)]
-            if med: baseAttrs.append(bgp.MEDAttribute(med))
-
-            attributes = {}
-            try:
-                attributes[(bgp.AFI_INET, bgp.SAFI_UNICAST)] = bgp.FrozenAttributeDict(baseAttrs + [
-                    bgp.NextHopAttribute(self.globalConfig['bgp-nexthop-ipv4'])])
-            except KeyError:
-                if (bgp.AFI_INET, bgp.SAFI_UNICAST) in BGPFailover.prefixes:
-                    raise ValueError("IPv4 BGP NextHop (global configuration variable 'bgp-nexthop-ipv4') not set")
-
-            try:
-                attributes[(bgp.AFI_INET6, bgp.SAFI_UNICAST)] = bgp.FrozenAttributeDict(baseAttrs + [
-                    bgp.MPReachNLRIAttribute((bgp.AFI_INET6, bgp.SAFI_UNICAST,
-                                             bgp.IPv6IP(self.globalConfig['bgp-nexthop-ipv6']), []))])
-            except KeyError:
-                if (bgp.AFI_INET6, bgp.SAFI_UNICAST) in BGPFailover.prefixes:
-                    raise ValueError("IPv6 BGP NextHop (global configuration variable 'bgp-nexthop-ipv6') not set")
-
-            advertisements = set([bgp.Advertisement(prefix, attributes[af], af)
-                                  for af in attributes.keys()
-                                  for prefix in BGPFailover.prefixes.get(af, set())])
-
-            self.bgpPeering.setEnabledAddressFamilies(set(attributes.keys()))
-            self.bgpPeering.setAdvertisements(advertisements)
-            self.bgpPeering.automaticStart()
-        except Exception:
-            log.critical("Could not set up BGP peering instance.")
-            raise
-        else:
-            BGPFailover.peerings.append(self.bgpPeering)
-            reactor.addSystemEventTrigger('before', 'shutdown', self.closeSession, self.bgpPeering)
-            try:
-                # Try to listen on the BGP port, not fatal if fails
-                reactor.listenTCP(bgp.PORT, bgp.BGPServerFactory({self.bgpPeering.peerAddr: self.bgpPeering}))
-            except Exception:
-                pass
-
-    def closeSession(self, peering):
-        log.info("Clearing session to {}".format(peering.peerAddr))
-        # Withdraw all announcements
-        peering.setAdvertisements(set())
-        return peering.manualStop()
-
-    @classmethod
-    def addPrefix(cls, prefix):
-        try:
-            if ':' not in prefix:
-                cls.prefixes.setdefault((bgp.AFI_INET, bgp.SAFI_UNICAST), set()).add(bgp.IPv4IP(prefix))
-            else:
-                cls.prefixes.setdefault((bgp.AFI_INET6, bgp.SAFI_UNICAST), set()).add(bgp.IPv6IP(prefix))
-        except NameError:
-            # bgp not imported
-            pass
-
-
-def parseCommandLine(configuration):
-    """
-    Parses the command line arguments, and sets configuration options
-    in dictionary configuration.
-    """
-    import argparse
-    parser = argparse.ArgumentParser(
-        description="Load Balancer manager script.",
-        epilog="See <https://wikitech.wikimedia.org/wiki/PyBal> for more."
-    )
-    parser.add_argument("-c", dest="conffile", help="Configuration file",
-                        default="/etc/pybal/pybal.conf")
-    parser.add_argument("-n", "--dryrun", action="store_true",
-                        help="Dry Run mode, do not actually update.")
-    parser.add_argument("-d", "--debug", action="store_true",
-                        help="Debug mode, run in foreground, "
-                        "log to stdout LVS configuration/state, "
-                        "print commands")
-    args = parser.parse_args()
-    configuration.update(args.__dict__)
-
-
-def sighandler(signum, frame):
-    """
-    Signal handler
-    """
-    if signum == signal.SIGHUP:
-        # TODO: reload config
-        pass
-    else:
-        # Stop the reactor if it's running
-        if reactor.running:
-            reactor.stop()
-
-
-def installSignalHandlers():
-    """
-    Installs Unix signal handlers, e.g. to run terminate() on TERM
-    """
-
-    signals = [signal.SIGTERM, signal.SIGHUP, signal.SIGINT]
-
-    for sig in signals:
-        signal.signal(sig, sighandler)
-
-
-def main():
-    services, cliconfig = {}, {}
-
-    # Parse the command line
-    parseCommandLine(cliconfig)
-
-    # Read the configuration file
-    config = SafeConfigParser()
-    config.read(cliconfig['conffile'])
-
-    try:
-        # Install signal handlers
-        installSignalHandlers()
-
-        for section in config.sections():
-            if section != 'global':
-                cfgtuple = (
-                    config.get(section, 'protocol'),
-                    config.get(section, 'ip'),
-                    config.getint(section, 'port'),
-                    config.get(section, 'scheduler'))
-
-            # Read the custom configuration options of the LVS section
-            configdict = util.ConfigDict(config.items(section))
-
-            # Override with command line options
-            configdict.update(cliconfig)
-
-            if section != 'global':
-                services[section] = ipvs.LVSService(section, cfgtuple, configuration=configdict)
-                crd = Coordinator(services[section],
-                    configUrl=config.get(section, 'config'))
-                log.info("Created LVS service '{}'".format(section))
-                instrumentation.PoolsRoot.addPool(crd.lvsservice.name, crd)
-
-        # Set up BGP
-        try:
-            configdict = util.ConfigDict(config.items('global'))
-        except Exception:
-            configdict = util.ConfigDict()
-        configdict.update(cliconfig)
-
-        # Set the logging level
-        if configdict.get('debug', False):
-            util.PyBalLogObserver.level = logging.DEBUG
-        else:
-            util.PyBalLogObserver.level = logging.INFO
-
-        bgpannouncement = BGPFailover(configdict)
-
-        # Run the web server for instrumentation
-        if configdict.getboolean('instrumentation', False):
-            from twisted.web.server import Site
-            port = configdict.getint('instrumentation_port', 9090)
-            factory = Site(instrumentation.ServerRoot())
-            reactor.listenTCP(port, factory)
-
-        reactor.run()
-    finally:
-        log.info("Exiting...")
-
-if __name__ == '__main__':
-    main()
