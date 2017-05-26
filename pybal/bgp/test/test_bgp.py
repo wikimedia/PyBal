@@ -9,7 +9,7 @@
 
 from .. import ip, bgp
 
-import unittest, mock
+import unittest, mock, struct
 
 from twisted.test import proto_helpers
 from twisted.python.failure import Failure
@@ -86,6 +86,10 @@ class BGPUpdateMessageTestCase(unittest.TestCase):
         self.assertEquals(self.msg.freeSpace(), bgp.MAX_LEN-len(self.msg))
 
 class BGPTestCase(unittest.TestCase):
+    MSG_DATA_OPEN = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                     b'\x00+\x01\x04\xfcX\x00\xb4\x7f\x7f\x7f\x7f\x0e\x02\x0c\x01\x04' +
+                     b'\x00\x01\x00\x01\x01\x04\x00\x02\x00\x01')
+
     def setUp(self):
         self.factory = bgp.BGPPeering(myASN=64600, peerAddr='127.0.0.1')
         # FIXME: Should configure this in a better way in bgp.FSM
@@ -137,10 +141,7 @@ class BGPTestCase(unittest.TestCase):
 
     def testSendOpen(self):
         self.proto.sendOpen()
-        self.assertEqual(self.tr.value(),
-            b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
-            b'\x00+\x01\x04\xfcX\x00\xb4\x7f\x7f\x7f\x7f\x0e\x02\x0c\x01\x04' +
-            b'\x00\x01\x00\x01\x01\x04\x00\x02\x00\x01')
+        self.assertEqual(self.tr.value(), self.MSG_DATA_OPEN)
 
     def testSendUpdate(self):
         withdrawals = [ip.IPPrefix('192.168.99.0/24')]
@@ -166,3 +167,44 @@ class BGPTestCase(unittest.TestCase):
         self.assertEqual(self.tr.value(),
             b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
             b'\x00#\x03\x03\x0bArbitrary data')
+
+    def testParseOpen(self):
+        # parseOpen rejects our own bgpId in MSG_DATA_OPEN,
+        # replace with some other IP
+        msgdata = bytearray(self.MSG_DATA_OPEN[bgp.HDR_LEN:])
+        bgpId = ip.IPv4IP('1.2.3.4').ipToInt()
+        struct.pack_into('!I', msgdata, 5, bgpId)
+
+        # Verify whether parseOpen returns the correct Open parameters
+        t = self.proto.parseOpen(str(msgdata))
+        self.assertEquals(t, (bgp.VERSION, self.factory.myASN, self.proto.fsm.holdTime, bgpId))
+
+        # Verify whether a truncated message raises BadMessageLength
+        self.assertRaises(bgp.BadMessageLength, self.proto.parseOpen, str(msgdata[:3]))
+
+        with mock.patch.object(self.proto.fsm, 'openMessageError') as mock_method:
+            # Verify whether any BGP version other than bgp.VERSION (4) raises
+            # ERR_MSG_OPEN_UNSUP_VERSION
+            msgdata[0] = 66
+            self.proto.parseOpen(str(msgdata))
+            mock_method.assert_called_with(bgp.ERR_MSG_OPEN_UNSUP_VERSION, chr(bgp.VERSION))
+            msgdata[0] = bgp.VERSION
+            mock_method.reset_mock()
+
+            # Verify whether invalid ASN 0 raises ERR_MSG_OPEN_BAD_PEER_AS
+            msgdata[1:3] = [0, 0]
+            self.proto.parseOpen(str(msgdata))
+            mock_method.assert_called_with(bgp.ERR_MSG_OPEN_BAD_PEER_AS)
+            mock_method.reset_mock()
+            msgdata[1:3] = [2, 3]
+
+            # Verify whether invalid BGP id 0 raises ERR_MSG_OPEN_BAD_BGP_ID
+            msgdata[5:9] = [0]*4
+            self.proto.parseOpen(str(msgdata))
+            mock_method.assert_called_with(bgp.ERR_MSG_OPEN_BAD_BGP_ID)
+            mock_method.reset_mock()
+
+            # MSG_DATA_OPEN is constructed using our own bgpId,
+            # Verify parseOpen rejects it
+            self.proto.parseOpen(self.MSG_DATA_OPEN[bgp.HDR_LEN:])
+            mock_method.assert_called_with(bgp.ERR_MSG_OPEN_BAD_BGP_ID)
