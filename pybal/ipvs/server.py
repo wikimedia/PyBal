@@ -56,7 +56,7 @@ class Server(netlink.Dest, fsm.FiniteStateMachine):
                            self.states['drained'],
                            self._add_weight_zero,
                            self.logError)
-        #S1 => S0
+        # S1 => S0
         # Remove a previously drained server
         self.addTransition(self.states['drained'],
                            self.states['unknown'],

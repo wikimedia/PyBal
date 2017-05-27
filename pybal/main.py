@@ -100,7 +100,7 @@ def main():
             if section != 'global':
                 services[section] = ipvs.get_service(section, cfgtuple, configdict)
                 crd = Coordinator(services[section],
-                    configUrl=config.get(section, 'config'))
+                                  configUrl=config.get(section, 'config'))
                 log.info("Created LVS service '{}'".format(section))
                 instrumentation.PoolsRoot.addPool(crd.lvsservice.name, crd)
 
@@ -117,7 +117,7 @@ def main():
         else:
             util.PyBalLogObserver.level = logging.INFO
 
-        bgpannouncement = BGPFailover(configdict)
+        BGPFailover(configdict)
 
         # Run the web server for instrumentation
         if configdict.getboolean('instrumentation', False):
@@ -129,6 +129,7 @@ def main():
         reactor.run()
     finally:
         log.info("Exiting...")
+
 
 if __name__ == '__main__':
     main()

@@ -10,9 +10,7 @@ from __future__ import absolute_import
 
 import ast
 import json
-import logging
 import os
-import re
 
 from twisted.internet import task
 from twisted.web import client

@@ -83,12 +83,14 @@ class Server:
         lookups = []
 
         query = dns.Query(self.host, dns.A)
-        lookups.append(client.lookupAddress(self.host, timeout
-            ).addCallback(self._lookupFinished, socket.AF_INET, query))
+        lookups.append(
+            client.lookupAddress(self.host, timeout).addCallback(self._lookupFinished, socket.AF_INET, query)
+        )
 
         query = dns.Query(self.host, dns.AAAA)
-        lookups.append(client.lookupIPV6Address(self.host, timeout
-            ).addCallback(self._lookupFinished, socket.AF_INET6, query))
+        lookups.append(
+            client.lookupIPV6Address(self.host, timeout).addCallback(self._lookupFinished, socket.AF_INET6, query)
+        )
 
         return defer.DeferredList(lookups).addBoth(self._hostnameResolved)
 
@@ -103,7 +105,7 @@ class Server:
             self.ip6_addresses = ips
 
         # TODO: expire TTL
-        #if self.ip:
+        # if self.ip:
         #    minTTL = min([r.ttl for r in answers
         #          if r.name == query.name and r.type == query.type])
 
@@ -119,18 +121,16 @@ class Server:
         log.debug(msg)
 
         ip_addresses = {
-            socket.AF_INET:
-                self.ip4_addresses,
-            socket.AF_INET6:
-                self.ip6_addresses
-            }[self.addressFamily]
+            socket.AF_INET: self.ip4_addresses,
+            socket.AF_INET6: self.ip6_addresses
+        }[self.addressFamily]
 
         try:
             if not self.ip or self.ip not in ip_addresses:
                 self.ip = random.choice(list(ip_addresses))
                 # TODO: (re)pool
         except IndexError:
-            return failure.Failure() # TODO: be more specific?
+            return failure.Failure()  # TODO: be more specific?
         else:
             return True
 
@@ -168,10 +168,10 @@ class Server:
         """
         log.error("Initialization failed for server {}".format(self.host))
 
-        assert self.ready == False
+        assert self.ready is False
         self.maintainState()
 
-        return False # Continue on success callback chain
+        return False  # Continue on success callback chain
 
     def createMonitoringInstances(self, coordinator):
         """Creates and runs monitoring instances for this Server"""
@@ -193,7 +193,8 @@ class Server:
         else:
             for monitorname in monitorlist:
                 try:
-                    monitormodule = getattr(__import__('pybal.monitors', fromlist=[monitorname.lower()], level=0), monitorname.lower())
+                    monitormodule = getattr(
+                        __import__('pybal.monitors', fromlist=[monitorname.lower()], level=0), monitorname.lower())
                 except AttributeError:
                     log.err("Monitor {} does not exist".format(monitorname))
                 else:
@@ -205,14 +206,14 @@ class Server:
     def calcStatus(self):
         """AND quantification of monitor.up over all monitoring instances of a single Server"""
 
-        # Global status is up iff all monitors report up
-        return reduce(lambda b,monitor: b and monitor.up, self.monitors, len(self.monitors) != 0)
+        # Global status is up if all monitors report up
+        return reduce(lambda b, monitor: b and monitor.up, self.monitors, len(self.monitors) != 0)
 
     def calcPartialStatus(self):
         """OR quantification of monitor.up over all monitoring instances of a single Server"""
 
-        # Partial status is up iff one of the monitors reports up
-        return reduce(lambda b,monitor: b or monitor.up, self.monitors, len(self.monitors) == 0)
+        # Partial status is up if one of the monitors reports up
+        return reduce(lambda b, monitor: b or monitor.up, self.monitors, len(self.monitors) == 0)
 
     def textStatus(self):
         return "%s/%s/%s" % (self.enabled and "enabled" or "disabled",
@@ -253,8 +254,8 @@ class Server:
         dictionary of (allowed) configuration attributes
         """
 
-        server = cls(hostName, lvsservice) # create a new instance...
-        server.merge(configuration)        # ...and override attributes
+        server = cls(hostName, lvsservice)  # create a new instance...
+        server.merge(configuration)         # ...and override attributes
         server.modified = False
 
         return server
@@ -301,7 +302,8 @@ class Coordinator:
         """
 
         for server in self.servers.itervalues():
-            if not server.modified: continue
+            if not server.modified:
+                continue
 
             server.up = server.calcStatus()
             server.pooled = server.enabled and server.up
@@ -323,7 +325,8 @@ class Coordinator:
 
         if server.up:
             server.up = False
-            if server.pooled: self.depool(server)
+            if server.pooled:
+                self.depool(server)
 
     def resultUp(self, monitor):
         """
@@ -338,7 +341,8 @@ class Coordinator:
                                                    server.textStatus()),
                      system=self.lvsservice.name)
             server.up = True
-            if server.enabled and server.ready: self.repool(server)
+            if server.enabled and server.ready:
+                self.repool(server)
 
     def depool(self, server):
         """Depools a single Server, if possible"""

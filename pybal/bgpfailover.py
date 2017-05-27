@@ -36,7 +36,8 @@ class BGPFailover:
             asPath = [int(asn) for asn in self.globalConfig.get('bgp-as-path', str(self.bgpPeering.myASN)).split()]
             med = self.globalConfig.getint('bgp-med', 0)
             baseAttrs = [bgp.OriginAttribute(), bgp.ASPathAttribute(asPath)]
-            if med: baseAttrs.append(bgp.MEDAttribute(med))
+            if med:
+                baseAttrs.append(bgp.MEDAttribute(med))
 
             attributes = {}
             try:

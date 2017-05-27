@@ -111,8 +111,8 @@ class Service(netlink.Service, fsm.FiniteStateMachine):
                                 protocol=self.proto_num())
 
     def equals(self, srv):
-        return (self.proto_ == srv.proto_ and self.vip() == srv.vip()
-                and self.port() == srv.port() and self.sched() == srv.sched())
+        return (self.proto_ == srv.proto_ and self.vip() == srv.vip() and
+                self.port() == srv.port() and self.sched() == srv.sched())
 
     def __eq__(self, srv):
         return (self.equals(srv) and self.currentState == srv.currentState)

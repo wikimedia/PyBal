@@ -20,9 +20,8 @@ import json
 
 
 def wantJson(request):
-    return (request.requestHeaders.hasHeader('Accept')
-            and 'application/json' in
-            request.requestHeaders.getRawHeaders('Accept'))
+    return (request.requestHeaders.hasHeader('Accept') and
+            'application/json' in request.requestHeaders.getRawHeaders('Accept'))
 
 
 class Resp404(Resource):
@@ -78,6 +77,7 @@ class Alerts(Resource):
             return json.dumps(resp)
         else:
             return "%s - %s" % (resp['status'].upper(), resp['msg'])
+
 
 class PoolsRoot(Resource):
     """Pools base resource.

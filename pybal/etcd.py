@@ -23,6 +23,7 @@ from .config import ConfigurationObserver
 from .version import USER_AGENT_STRING
 from .util import log
 
+
 def decode_node(node):
     """Decode an individual node from an etcd response."""
     key = node['key'].rsplit('/', 1)[-1]

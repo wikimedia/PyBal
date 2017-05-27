@@ -3,7 +3,6 @@ from pybal.ipvs.ipvsadm import IPVSADMManager
 from pybal.util import log
 
 
-
 class LVSService:
     """Class that maintains the state of a single LVS service
     instance."""

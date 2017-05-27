@@ -89,7 +89,7 @@ class NetlinkServiceManager(LVSService):
     def removeServer(self, server):
         def depool(*args):
             server.pooled = False
-            self.servers.remove(server) # May raise KeyError
+            self.servers.remove(server)  # May raise KeyError
             # We also want to remove the host from destinations
             # this is not strictly needed but will avoid this to
             # expand forever if we add/remove servers.
