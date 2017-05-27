@@ -5,12 +5,14 @@ Copyright (C) 2006 by Mark Bergsma <mark@nedworks.org>
 Monitor class implementations for PyBal
 """
 
-from pybal import monitor, util
+import logging
+import random
 
 from twisted.internet import reactor, defer
 from twisted.web import client
 from twisted.python.runtime import seconds
-import logging, random
+
+from pybal import monitor, util
 
 log = util.log
 

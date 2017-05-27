@@ -7,7 +7,7 @@ Monitor class implementations for PyBal
 
 from pybal import monitor
 
-from twisted.internet import reactor, protocol
+from twisted.internet import protocol
 import logging
 
 import socket

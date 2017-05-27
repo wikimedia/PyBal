@@ -4,15 +4,16 @@ Copyright (C) 2012-2014 by Mark Bergsma <mark@nedworks.org>
 
 DNS Monitor class implementation for PyBal
 """
-
-from pybal import monitor
+import logging
+import random
+import socket
 
 from twisted.internet import reactor, defer
 from twisted.names import client, dns, error
 from twisted.python import runtime
-import logging
 
-import random, socket
+from pybal import monitor
+
 
 class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
     """
@@ -28,7 +29,6 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
                  error.AuthoritativeDomainError, error.DNSFormatError, error.DNSNameError,
                  error.DNSQueryRefusedError, error.DNSQueryTimeoutError,
                  error.DNSServerError, error.DNSUnknownError)
-
 
     def __init__(self, coordinator, server, configuration):
         """Constructor"""
@@ -79,9 +79,8 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         elif query.type == dns.AAAA:
             self.DNSQueryDeferred = self.resolver.lookupIPV6Address(hostname, timeout=[self.toQuery])
 
-        self.DNSQueryDeferred.addCallback(self._querySuccessful, query
-                ).addErrback(self._queryFailed, query
-                ).addBoth(self._checkFinished)
+        self.DNSQueryDeferred.addCallback(self._querySuccessful, query) \
+            .addErrback(self._queryFailed, query).addBoth(self._checkFinished)
         return self.DNSQueryDeferred
 
     def _querySuccessful(self, (answers, authority, additional), query):
@@ -96,8 +95,8 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         else:
             resultStr = None
 
-        self.report('DNS query successful, %.3f s' % (runtime.seconds() - self.checkStartTime)
-                    + (resultStr and (': ' + resultStr) or ""))
+        self.report('DNS query successful, %.3f s' % (runtime.seconds() - self.checkStartTime) +
+                    (resultStr and (': ' + resultStr) or ""))
         self._resultUp()
 
         return answers, authority, additional

@@ -9,23 +9,24 @@ to be implemented.
 
 from pybal import monitor
 
+
 class SkeletonMonitoringProtocol(monitor.MonitoringProtocol):
     """
     Description.
     """
-    
+
     __name__ = 'Skeleton'
-    
+
     def __init__(self, coordinator, server, configuration):
         """Constructor"""
 
-        # Call ancestor constructor        
+        # Call ancestor constructor
         super(SkeletonMonitoringProtocol, self).__init__(coordinator, server, configuration)
-    
+
     def run(self):
-        """Start the monitoring""" 
+        """Start the monitoring"""
         pass
-    
+
     def stop(self):
         """Stop the monitoring"""
         pass

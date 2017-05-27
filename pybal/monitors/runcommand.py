@@ -4,14 +4,16 @@ Copyright (C) 2008 by Mark Bergsma <mark@nedworks.org>
 
 Monitor class implementations for PyBal
 """
+import errno
+import logging
+import os
+import signal
+
+from twisted.internet import reactor, process, error
 
 from pybal import monitor
 from pybal.util import log
 
-import os, sys, signal, errno
-import logging
-
-from twisted.internet import reactor, process, error
 
 class ProcessGroupProcess(process.Process, object):
     """
@@ -44,8 +46,10 @@ class ProcessGroupProcess(process.Process, object):
 
     def processEnded(self, status):
         if self.timeoutCall:
-            try: self.timeoutCall.cancel()
-            except Exception: pass
+            try:
+                self.timeoutCall.cancel()
+            except Exception:
+                pass
 
         pgid = -self.pid
         try:
@@ -78,6 +82,7 @@ class ProcessGroupProcess(process.Process, object):
     def signalProcessGroup(self, signal, pgid=None):
         os.kill(pgid or -self.pid, signal)
 
+
 class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
     """
     Monitor that checks server uptime by repeatedly fetching a certain URL
@@ -95,8 +100,7 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         # Call ancestor constructor
         super(RunCommandMonitoringProtocol, self).__init__(coordinator, server, configuration)
 
-        locals = {  'server':   server
-        }
+        locals = { 'server': server }
 
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.timeout = self._getConfigInt('timeout', self.TIMEOUT_RUN)
@@ -125,8 +129,10 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
 
         # Try to kill any running check
         if self.runningProcess is not None:
-            try: self.runningProcess.signalProcess(signal.SIGKILL)
-            except error.ProcessExitedAlready: pass
+            try:
+                self.runningProcess.signalProcess(signal.SIGKILL)
+            except error.ProcessExitedAlready:
+                pass
 
     def runCommand(self):
         """Periodically called method that does a single uptime check."""
@@ -138,7 +144,8 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         pass
 
     def childDataReceived(self, childFD, data):
-        if not self.logOutput: return
+        if not self.logOutput:
+            return
 
         # Escape control chars
         map = {'\n': r'\n',
@@ -182,9 +189,9 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
                     level=logging.WARN)
 
     def _spawnProcess(self, processProtocol, executable, args=(),
-                     env={}, path=None,
-                     uid=None, gid=None, childFDs=None,
-                     sessionLeader=False, timeout=None):
+                      env={}, path=None,
+                      uid=None, gid=None, childFDs=None,
+                      sessionLeader=False, timeout=None):
         """
         Replacement for posixbase.PosixReactorBase.spawnProcess with added
         process group / session and timeout support, and support for
@@ -193,5 +200,5 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
 
         args, env = reactor._checkProcessArgs(args, env)
         return ProcessGroupProcess(reactor, executable, args, env, path,
-                               processProtocol, uid, gid, childFDs,
-                               sessionLeader, timeout)
+                                   processProtocol, uid, gid, childFDs,
+                                   sessionLeader, timeout)
