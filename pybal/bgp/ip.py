@@ -90,7 +90,9 @@ class IPPrefix(object):
 
     def __eq__(self, other):
         # FIXME: masked ips
-        return isinstance(other, IPPrefix) and self.prefixlen == other.prefixlen and self.prefix == other.prefix
+        return (isinstance(other, IPPrefix)
+            and self.prefixlen == other.prefixlen
+            and self.packed(pad=True) == other.packed(pad=True))
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -117,6 +119,9 @@ class IPPrefix(object):
 
     def _packedMaxLen(self):
         return (self.addressfamily == AFI_INET6 and 16 or 4)
+
+    def _packedMinLen(self):
+        return -(-self.prefixlen // 8)
 
     def ipToInt(self):
         return reduce(lambda x, y: x * 256 + y, map(ord, self.prefix))
