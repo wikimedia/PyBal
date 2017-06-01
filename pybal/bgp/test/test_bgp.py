@@ -242,3 +242,15 @@ class BGPTestCase(unittest.TestCase):
         msgdata = bytearray(bytes(update)[bgp.HDR_LEN:])
         msgdata[0] += 66
         self.assertRaises(Exception, self.proto.parseUpdate, msgdata)
+
+    def testParseKeepAlive(self):
+        self.assertRaises(bgp.BadMessageLength, self.proto.parseKeepAlive, b' ')
+
+    def testParseNotification(self):
+        # Verify whether a valid NOTIFICATION parses correctly
+        msg = (struct.pack('!BB', bgp.ERR_MSG_UPDATE,
+            bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH) + b"Unit test")
+        self.assertEquals(self.proto.parseNotification(msg),
+            (bgp.ERR_MSG_UPDATE, bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH, b"Unit test"))
+        # Verify a truncated message raises BadMessageLength
+        self.assertRaises(bgp.BadMessageLength, self.proto.parseNotification, b' ')
