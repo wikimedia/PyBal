@@ -208,3 +208,37 @@ class BGPTestCase(unittest.TestCase):
             # Verify parseOpen rejects it
             self.proto.parseOpen(self.MSG_DATA_OPEN[bgp.HDR_LEN:])
             mock_method.assert_called_with(bgp.ERR_MSG_OPEN_BAD_BGP_ID)
+
+    def testParseUpdate(self):
+        # Test empty UPDATE
+        update = bgp.BGPUpdateMessage()
+        self.assertEquals(self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:]), ([], [], []))
+
+        # Add withdrawals
+        withdrawals = [ip.IPPrefix("192.168.{0}.0/24".format(i)) for i in range(100)]
+        update.addSomeWithdrawals(set(withdrawals))
+        r = self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:])
+        self.assertListEqual(sorted(r[0]), withdrawals)
+        self.assertEquals(r[1:], ([], []))
+
+        # Add some attributes
+        update.addAttributes(BGPUpdateMessageTestCase.attrs)
+        r = self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:])
+        self.assertListEqual(sorted(r[0]), withdrawals)
+        self.assertEquals(len(r[1]), len(BGPUpdateMessageTestCase.attrs))
+        self.assertEquals(r[2:], ([], ))
+
+        # ...and some NLRI
+        nlri = [ip.IPPrefix("10.{0}.3.0/24".format(i)) for i in range(100)]
+        update.addSomeNLRI(set(nlri))
+        r = self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:])
+        self.assertListEqual(sorted(r[0]), withdrawals)
+        self.assertEquals(len(r[1]), len(BGPUpdateMessageTestCase.attrs))
+        self.assertListEqual(sorted(r[2]), nlri)
+
+        # Test a malformed message
+        # FIXME: Test for specific struct.unpack exception
+        # FIXME: fix parseUpdate string slicing code to catch truncated message
+        msgdata = bytearray(bytes(update)[bgp.HDR_LEN:])
+        msgdata[0] += 66
+        self.assertRaises(Exception, self.proto.parseUpdate, msgdata)
