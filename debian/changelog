@@ -1,3 +1,10 @@
+pybal (1.13.7) jessie-wikimedia; urgency=medium
+
+  * Add IPv6 support to all monitors (Bug: #T82747)
+  * Include IP and port information in IdleConnection logs
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Tue, 04 Jul 2017 15:50:28 +0200
+
 pybal (1.13.6) jessie-wikimedia; urgency=medium
 
   * Change the default behavior for LVS services from not being announced via
