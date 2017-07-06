@@ -136,6 +136,7 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
 
     def clientConnectionFailed(self, connector, reason):
         log.error("client connection failed: reason=%s" % reason, system="config-etcd")
+        self.waitIndex = None
         connector.connect()
 
     def clientConnectionLost(self, connector, reason):
@@ -144,7 +145,7 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
             log.info("client connection closed cleanly", system="config-etcd")
         else:
             log.error("client connection lost: reason=%s" % reason, system="config-etcd")
-
+        self.waitIndex = None
         connector.connect()
 
     def getMaxModifiedIndex(self, root):
