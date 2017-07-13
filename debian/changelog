@@ -1,3 +1,10 @@
+pybal (1.13.8) jessie-wikimedia; urgency=medium
+
+  * Reset the waitIndex when connection is lost or failed (Bug: #T169893)
+  * DnsQuery monitor: query over IPv4 (Bug: #T82747)
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Thu, 13 Jul 2017 10:51:12 +0200
+
 pybal (1.13.7) jessie-wikimedia; urgency=medium
 
   * Add IPv6 support to all monitors (Bug: #T82747)
