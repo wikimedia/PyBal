@@ -1,3 +1,9 @@
+pybal (1.13.9) jessie-wikimedia; urgency=medium
+
+  * Reset waitIndex when connection is lost in a unclean way (Bug: #T169893)
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Thu, 13 Jul 2017 11:29:15 +0200
+
 pybal (1.13.8) jessie-wikimedia; urgency=medium
 
   * Reset the waitIndex when connection is lost or failed (Bug: #T169893)
