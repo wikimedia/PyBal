@@ -1,3 +1,9 @@
+pybal (1.13.10) jessie-wikimedia; urgency=medium
+
+  * Add support for One-packet scheduling (OPS) (Bug: #T104442)
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Wed, 26 Jul 2017 19:26:13 +0200
+
 pybal (1.13.9) jessie-wikimedia; urgency=medium
 
   * Reset waitIndex when connection is lost in a unclean way (Bug: #T169893)
