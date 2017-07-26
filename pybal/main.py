@@ -13,7 +13,7 @@ import argparse
 import logging
 import signal
 
-from ConfigParser import SafeConfigParser
+from ConfigParser import SafeConfigParser, NoOptionError
 
 from twisted.internet import reactor
 
@@ -85,11 +85,16 @@ def main():
 
         for section in config.sections():
             if section != 'global':
+                try:
+                    ops = config.getboolean(section, 'ops')
+                except NoOptionError:
+                    ops = False
                 cfgtuple = (
                     config.get(section, 'protocol'),
                     config.get(section, 'ip'),
                     config.getint(section, 'port'),
-                    config.get(section, 'scheduler'))
+                    config.get(section, 'scheduler'),
+                    ops)
 
             # Read the custom configuration options of the LVS section
             configdict = util.ConfigDict(config.items(section))

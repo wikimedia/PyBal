@@ -100,6 +100,10 @@ class IPVSManager(object):
         if len(service) > 3:
             cmd += ' -s ' + service[3]
 
+            # One-packet scheduling
+            if len(service) > 4 and service[4]:
+                cmd += ' -o'
+
         return cmd
 
     @classmethod
@@ -162,7 +166,7 @@ class LVSService:
     SVC_SCHEDULERS = ('rr', 'wrr', 'lc', 'wlc', 'lblc', 'lblcr', 'dh', 'sh',
                       'sed', 'nq')
 
-    def __init__(self, name, (protocol, ip, port, scheduler), configuration):
+    def __init__(self, name, (protocol, ip, port, scheduler, ops), configuration):
         """Constructor"""
 
         self.name = name
@@ -172,10 +176,16 @@ class LVSService:
                 scheduler not in self.SVC_SCHEDULERS):
             raise ValueError('Invalid protocol or scheduler')
 
+        if protocol == 'tcp' and ops:
+            raise ValueError(
+                'OPS can only be used with UDP virtual services')
+
         self.protocol = protocol
         self.ip = ip
         self.port = port
         self.scheduler = scheduler
+        # Boolean to toggle "One-packet scheduling"
+        self.ops = ops
 
         self.configuration = configuration
 
@@ -189,10 +199,10 @@ class LVSService:
         self.createService()
 
     def service(self):
-        """Returns a tuple (protocol, ip, port, scheduler) that
+        """Returns a tuple (protocol, ip, port, scheduler, ops) that
         describes this LVS instance."""
 
-        return (self.protocol, self.ip, self.port, self.scheduler)
+        return (self.protocol, self.ip, self.port, self.scheduler, self.ops)
 
     def createService(self):
         """Initializes this LVS instance in LVS."""
