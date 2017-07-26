@@ -104,7 +104,7 @@ class LVSServiceTestCase(PyBalTestCase):
     def setUp(self):
         super(LVSServiceTestCase, self).setUp()
         self.config['dryrun'] = 'true'
-        self.service = ('tcp', '127.0.0.1', 80, 'rr')
+        self.service = ('tcp', '127.0.0.1', 80, 'rr', False)
         pybal.pybal.BGPFailover.prefixes.clear()
 
         def stubbedModifyState(cls, cmdList):
@@ -120,12 +120,16 @@ class LVSServiceTestCase(PyBalTestCase):
     def testConstructor(self):
         """Test `LVSService.__init__`."""
         with self.assertRaises(ValueError):
-            service = ('invalid-protocol', '127.0.0.1', 80, 'rr')
+            service = ('invalid-protocol', '127.0.0.1', 80, 'rr', False)
             pybal.ipvs.LVSService('invalid-protocol', service, self.config)
 
         with self.assertRaises(ValueError):
-            service = ('tcp', '127.0.0.1', 80, 'invalid-scheduler')
+            service = ('tcp', '127.0.0.1', 80, 'invalid-scheduler', False)
             pybal.ipvs.LVSService('invalid-scheduler', service, self.config)
+
+        with self.assertRaises(ValueError):
+            service = ('tcp', '127.0.0.1', 80, 'rr', True)
+            pybal.ipvs.LVSService('ops-with-tcp', service, self.config)
 
         self.config['bgp'] = 'true'
         pybal.ipvs.LVSService('http', self.service, self.config)
@@ -141,6 +145,13 @@ class LVSServiceTestCase(PyBalTestCase):
         lvs_service = pybal.ipvs.LVSService('http', self.service, self.config)
         self.assertEquals(lvs_service.ipvsManager.cmdList,
                           ['-D -t 127.0.0.1:80', '-A -t 127.0.0.1:80 -s rr'])
+
+    def testCreateServiceOps(self):
+        """Test `LVSService.createService`."""
+        service = ('udp', '127.0.0.1', 53, 'rr', True)
+        lvs_service = pybal.ipvs.LVSService('dns', service, self.config)
+        self.assertEquals(lvs_service.ipvsManager.cmdList,
+            ['-D -u 127.0.0.1:53', '-A -u 127.0.0.1:53 -s rr -o'])
 
     def testAssignServers(self):
         """Test `LVSService.assignServers`."""
