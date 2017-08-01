@@ -1,3 +1,16 @@
+pybal (1.13.11) jessie-wikimedia; urgency=medium
+
+  * Instrumentation fixes
+    - introduce a new global configuration option, 'instrumentation_ips', to
+      specify the IPs on which to bind the instrumentation TCP port
+      (Bug: #T103882)
+    - use Content-Type: text/plain by default, application/json when returning
+      JSON content
+    - do not mention the URL in 404 responses
+  * Set empty PYTHONPATH in tox.ini to fix test execution
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Tue, 01 Aug 2017 09:18:56 +0200
+
 pybal (1.13.10) jessie-wikimedia; urgency=medium
 
   * Add support for One-packet scheduling (OPS) (Bug: #T104442)
