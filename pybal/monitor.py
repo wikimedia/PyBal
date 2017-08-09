@@ -7,6 +7,7 @@ Monitor class implementations for PyBal
 from twisted.internet import reactor
 from . import util
 import logging
+from pybal.metrics import Counter
 
 _log = util._log
 
@@ -16,6 +17,20 @@ class MonitoringProtocol(object):
     Base class for all monitoring protocols. Declares a few obligatory
     abstract methods, and some commonly useful functions.
     """
+
+    __name__ = ''
+
+    metric_labelnames = ('service', 'host', 'monitor')
+    metric_keywords = {
+        'labelnames': metric_labelnames,
+        'namespace': 'pybal',
+        'subsystem': 'monitor'
+    }
+
+    metrics = {
+        'up_transitions_total': Counter('up_transitions_total', 'Monitor up transition count', **metric_keywords),
+        'down_transitions_total': Counter('down_transitions_total', 'Monitor down transition count', **metric_keywords),
+    }
 
     def __init__(self, coordinator, server, configuration={}, reactor=reactor):
         """Constructor"""
@@ -31,6 +46,12 @@ class MonitoringProtocol(object):
 
         # Install cleanup handler
         self.reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
+
+        self.metric_labels = {
+            'service': self.server.lvsservice.name,
+            'host': self.server.host,
+            'monitor': self.name()
+        }
 
     def run(self):
         """Start the monitoring"""
@@ -55,6 +76,9 @@ class MonitoringProtocol(object):
             if self.coordinator:
                 self.coordinator.resultUp(self)
 
+            self.metrics['up_transitions_total'].labels(**self.metric_labels).inc()
+
+
     def _resultDown(self, reason=None):
         """Sets own monitoring state to Down and notifies the
         coordinator if this implies a state change."""
@@ -63,6 +87,8 @@ class MonitoringProtocol(object):
             self.firstCheck = False
             if self.coordinator:
                 self.coordinator.resultDown(self, reason)
+
+            self.metrics['down_transitions_total'].labels(**self.metric_labels).inc()
 
     def report(self, text, level=logging.DEBUG):
         """Common method for reporting/logging check results."""

@@ -31,7 +31,7 @@ class IdleConnectionMonitoringProtocolTestCase(PyBalTestCase):
 
     def testInit(self):
         """Test `IdleConnectionMonitoringProtocol.__init__`."""
-        monitor = IdleConnectionMonitoringProtocol(None, None, self.config)
+        monitor = IdleConnectionMonitoringProtocol(None, self.server, self.config)
         self.assertEquals(
             monitor.maxDelay, IdleConnectionMonitoringProtocol.MAX_DELAY)
         self.assertEquals(
@@ -40,7 +40,7 @@ class IdleConnectionMonitoringProtocolTestCase(PyBalTestCase):
         )
         self.config['idleconnection.max-delay'] = '123'
         self.config['idleconnection.timeout-clean-reconnect'] = '456'
-        monitor = IdleConnectionMonitoringProtocol(None, None, self.config)
+        monitor = IdleConnectionMonitoringProtocol(None, self.server, self.config)
         self.assertEquals(monitor.maxDelay, 123)
         self.assertEquals(monitor.toCleanReconnect, 456)
 
@@ -127,7 +127,7 @@ class DNSQueryMonitoringProtocolTestCase(PyBalTestCase):
 
     def testInit(self):
         """Test `DNSQueryMonitoringProtocol.__init__`."""
-        monitor = DNSQueryMonitoringProtocol(None, None, self.config)
+        monitor = DNSQueryMonitoringProtocol(None, self.server, self.config)
 
         self.assertEquals(monitor.intvCheck, monitor.INTV_CHECK)
         self.assertEquals(monitor.toQuery, monitor.TIMEOUT_QUERY)

@@ -21,7 +21,7 @@ class MonitoringProtocolTestCase(PyBalTestCase):
     def setUp(self):
         super(MonitoringProtocolTestCase, self).setUp()
         self.monitor = pybal.monitor.MonitoringProtocol(
-            self.coordinator, None, self.config)
+            self.coordinator, self.server, self.config)
         self.monitor.__name__ = 'TestMonitor'
         self.reactor = twisted.internet.reactor
 

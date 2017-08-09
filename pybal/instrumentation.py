@@ -16,6 +16,13 @@
 """
 
 from twisted.web.resource import Resource
+
+try:
+    from prometheus_client.twisted import MetricsResource
+    prometheus_support = True
+except ImportError:
+    prometheus_support = False
+
 import json
 
 
@@ -50,6 +57,8 @@ class ServerRoot(Resource):
             return PoolsRoot()
         if path == 'alerts':
             return Alerts()
+        if prometheus_support and path == 'metrics':
+            return MetricsResource()
         else:
             return Resp404()
 

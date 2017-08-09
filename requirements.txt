@@ -1,2 +1,3 @@
 twisted
 PyOpenSSL
+prometheus_client
