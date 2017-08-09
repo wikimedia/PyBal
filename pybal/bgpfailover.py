@@ -8,6 +8,7 @@ LVS Squid balancer/monitor for managing the Wikimedia Squid servers using LVS
 """
 
 from twisted.internet import reactor
+from twisted.internet.error import CannotListenError
 
 from pybal.util import log
 try:
@@ -67,11 +68,23 @@ class BGPFailover:
         else:
             BGPFailover.peerings.append(self.bgpPeering)
             reactor.addSystemEventTrigger('before', 'shutdown', self.closeSession, self.bgpPeering)
-            try:
-                # Try to listen on the BGP port, not fatal if fails
-                reactor.listenTCP(bgp.PORT, bgp.BGPServerFactory({self.bgpPeering.peerAddr: self.bgpPeering}))
-            except Exception:
-                pass
+
+            # Bind on the IPs listed in 'bgp_local_ips'. Default to
+            # localhost v4 and v6 if no IPs have been specified in the
+            # configuration.
+            bgp_local_ips = eval(self.globalConfig.get('bgp-local-ips', '[""]'))
+            bgp_local_port = self.globalConfig.getint('bgp-local-port', bgp.PORT)
+            # Try to listen on the BGP port, not fatal if fails
+            for ip in bgp_local_ips:
+                try:
+                    reactor.listenTCP(
+                        bgp_local_port,
+                        bgp.BGPServerFactory({self.bgpPeering.peerAddr: self.bgpPeering}),
+                        interface=ip)
+                except CannotListenError as e:
+                    log.critical(
+                        "Could not listen for BGP connections: " + str(e))
+                    raise
 
     def closeSession(self, peering):
         log.info("Clearing session to {}".format(peering.peerAddr))
