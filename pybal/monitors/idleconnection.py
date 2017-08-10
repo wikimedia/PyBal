@@ -6,6 +6,7 @@ Monitor class implementations for PyBal
 """
 
 from pybal import monitor, util
+from pybal.metrics import Counter
 
 from twisted.internet import reactor, protocol
 import logging
@@ -31,6 +32,26 @@ class IdleConnectionMonitoringProtocol(monitor.MonitoringProtocol, protocol.Reco
     KEEPALIVE_INTERVAL = 30
 
     __name__ = 'IdleConnection'
+
+    metric_labelnames = ('service', 'host', 'monitor')
+    metric_keywords = {
+        'namespace': 'pybal',
+        'subsystem': 'monitor_' + __name__.lower()
+    }
+
+    idleconnection_metrics = {
+        'connections_failed_total': Counter(
+            'connections_failed_total',
+            'Connections failed to establish',
+            labelnames=metric_labelnames + ('reason',),
+            **metric_keywords),
+        'connections_lost_total': Counter(
+            'connections_lost_total',
+            'Connections lost uncleanly',
+            labelnames=metric_labelnames + ('reason',),
+            **metric_keywords)
+    }
+
 
     def __init__(self, coordinator, server, configuration):
         """Constructor"""
@@ -76,6 +97,11 @@ class IdleConnectionMonitoringProtocol(monitor.MonitoringProtocol, protocol.Reco
 
         self.report("%s failed." % self._report_prefix(), level=logging.WARN)
 
+        self.idleconnection_metrics['connections_failed_total'].labels(
+            reason=reason.type.__name__,
+            **self.metric_labels
+            ).inc()
+
         # Slowly reconnect
         self.retry(connector)
 
@@ -94,6 +120,11 @@ class IdleConnectionMonitoringProtocol(monitor.MonitoringProtocol, protocol.Reco
             self._resultDown(reason.getErrorMessage())
 
             self.report("%s lost." % self._report_prefix(), level=logging.INFO)
+
+            self.idleconnection_metrics['connections_lost_total'].labels(
+                reason=reason.type.__name__,
+                **self.metric_labels
+                ).inc()
 
             # Slowly reconnect
             self.retry(connector)
