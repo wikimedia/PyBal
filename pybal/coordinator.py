@@ -6,10 +6,11 @@ Copyright (C) 2006-2017 by Mark Bergsma <mark@nedworks.org>
 
 LVS Squid balancer/monitor for managing the Wikimedia Squid servers using LVS
 """
+import importlib
 import random
 import socket
 
-from twisted.internet import defer
+from twisted.internet import defer, reactor
 from twisted.names import client, dns
 from twisted.python import failure
 
@@ -193,9 +194,18 @@ class Server:
         else:
             for monitorname in monitorlist:
                 try:
-                    monitormodule = getattr(__import__('pybal.monitors', fromlist=[monitorname.lower()], level=0), monitorname.lower())
-                except AttributeError:
+                    monitormodule = importlib.import_module(
+                        "pybal.monitors.{}".format(monitorname.lower()))
+                except ImportError:
                     log.err("Monitor {} does not exist".format(monitorname))
+                except Exception:
+                    log.critical("Cannot import pybal.monitors.{}".format(monitorname))
+                    # An exception was raised importing the given monitor
+                    # module. Instead of just logging the problem, stop PyBal
+                    # as the admin might think everything is fine and all
+                    # checks are green, while in fact no check is being
+                    # performed.
+                    reactor.stop()
                 else:
                     monitorclass = getattr(monitormodule, monitorname + 'MonitoringProtocol')
                     monitor = monitorclass(coordinator, self, lvsservice.configuration)
