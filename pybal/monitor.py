@@ -7,7 +7,7 @@ Monitor class implementations for PyBal
 from twisted.internet import reactor
 from . import util
 import logging
-from pybal.metrics import Counter
+from pybal.metrics import Counter, Gauge
 
 _log = util._log
 
@@ -30,6 +30,9 @@ class MonitoringProtocol(object):
     metrics = {
         'up_transitions_total': Counter('up_transitions_total', 'Monitor up transition count', **metric_keywords),
         'down_transitions_total': Counter('down_transitions_total', 'Monitor down transition count', **metric_keywords),
+        'up_results_total': Counter('up_results_total', 'Monitor up result count', **metric_keywords),
+        'down_results_total': Counter('down_results_total', 'Monitor down result count', **metric_keywords),
+        'status': Gauge('status', 'Monitor up status', **metric_keywords)
     }
 
     def __init__(self, coordinator, server, configuration={}, reactor=reactor):
@@ -70,6 +73,7 @@ class MonitoringProtocol(object):
         """Sets own monitoring state to Up and notifies the coordinator
         if this implies a state change.
         """
+        self.metrics['up_results_total'].labels(**self.metric_labels).inc()
         if self.active and self.up is False or self.firstCheck:
             self.up = True
             self.firstCheck = False
@@ -77,11 +81,12 @@ class MonitoringProtocol(object):
                 self.coordinator.resultUp(self)
 
             self.metrics['up_transitions_total'].labels(**self.metric_labels).inc()
-
+            self.metrics['status'].labels(**self.metric_labels).set(1)
 
     def _resultDown(self, reason=None):
         """Sets own monitoring state to Down and notifies the
         coordinator if this implies a state change."""
+        self.metrics['down_results_total'].labels(**self.metric_labels).inc()
         if self.active and self.up is True or self.firstCheck:
             self.up = False
             self.firstCheck = False
@@ -89,6 +94,7 @@ class MonitoringProtocol(object):
                 self.coordinator.resultDown(self, reason)
 
             self.metrics['down_transitions_total'].labels(**self.metric_labels).inc()
+            self.metrics['status'].labels(**self.metric_labels).set(0)
 
     def report(self, text, level=logging.DEBUG):
         """Common method for reporting/logging check results."""
