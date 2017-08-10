@@ -316,6 +316,10 @@ class Coordinator:
             'could_not_depool_total',
             'Pybal could not depool a server because too many down',
             **metric_keywords),
+        'depool_threshold': Gauge(
+            'depool_threshold',
+            "Threshold of up servers vs total servers below which pybal can't depool any more",
+            **metric_keywords),
     }
 
     def __init__(self, lvsservice, configUrl):
@@ -332,6 +336,10 @@ class Coordinator:
         self.serverInitDeferredList = defer.Deferred()
         self.configObserver = config.ConfigurationObserver.fromUrl(self, configUrl)
         self.configObserver.startObserving()
+
+        self.metrics['depool_threshold'].labels(
+            **self.metric_labels
+            ).set(self.lvsservice.getDepoolThreshold())
 
     def __str__(self):
         return "[%s]" % self.lvsservice.name
