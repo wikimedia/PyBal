@@ -6,6 +6,7 @@ DNS Monitor class implementation for PyBal
 """
 
 from pybal import monitor
+from pybal.metrics import Gauge
 
 from twisted.internet import reactor, defer
 from twisted.names import client, dns, error
@@ -29,6 +30,19 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
                  error.DNSQueryRefusedError, error.DNSQueryTimeoutError,
                  error.DNSServerError, error.DNSUnknownError)
 
+    metric_labelnames = ('service', 'host', 'monitor')
+    metric_keywords = {
+        'namespace': 'pybal',
+        'subsystem': 'monitor_' + __name__.lower()
+    }
+
+    dnsquery_metrics = {
+        'request_duration_seconds': Gauge(
+            'request_duration_seconds',
+            'DNS query duration',
+            labelnames=metric_labelnames + ('result',),
+            **metric_keywords)
+    }
 
     def __init__(self, coordinator, server, configuration):
         """Constructor"""
@@ -98,9 +112,15 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         else:
             resultStr = None
 
-        self.report('DNS query successful, %.3f s' % (runtime.seconds() - self.checkStartTime)
+        duration = runtime.seconds() - self.checkStartTime
+        self.report('DNS query successful, %.3f s' % (duration)
                     + (resultStr and (': ' + resultStr) or ""))
         self._resultUp()
+
+        self.dnsquery_metrics['request_duration_seconds'].labels(
+            result='successful',
+            **self.metric_labels
+            ).set(duration)
 
         return answers, authority, additional
 
@@ -127,12 +147,18 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         else:
             errorStr = str(failure)
 
+        duration = runtime.seconds() - self.checkStartTime
         self.report(
-            'DNS query failed, %.3f s' % (runtime.seconds() - self.checkStartTime),
+            'DNS query failed, %.3f s' % (duration),
             level=logging.ERROR
         )
 
         self._resultDown(errorStr)
+
+        self.dnsquery_metrics['request_duration_seconds'].labels(
+            result='failed',
+            **self.metric_labels
+            ).set(duration)
 
         failure.trap(*self.catchList)
 
