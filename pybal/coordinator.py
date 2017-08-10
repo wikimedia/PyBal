@@ -15,6 +15,7 @@ from twisted.names import client, dns
 from twisted.python import failure
 
 from pybal import config, util
+from pybal.metrics import Counter, Gauge
 
 log = util.log
 
@@ -280,11 +281,51 @@ class Coordinator:
 
     intvLoadServers = 60
 
+    metric_keywords = {
+        'labelnames': ('service', ),
+        'namespace': 'pybal',
+        'subsystem': 'service'
+    }
+
+    metrics = {
+        'servers': Gauge(
+            'servers',
+            'Amount of servers',
+            **metric_keywords),
+        'servers_enabled': Gauge(
+            'servers_enabled',
+            'Amount of enabled servers',
+            **metric_keywords),
+        'servers_up': Gauge(
+            'servers_up',
+            'Amount of up servers',
+            **metric_keywords),
+        'servers_pooled': Gauge(
+            'servers_pooled',
+            'Amount of pooled servers',
+            **metric_keywords),
+        'can_depool': Gauge(
+            'can_depool',
+            'Can depool more servers',
+            **metric_keywords),
+        'pooled_down_servers': Gauge(
+            'pooled_down_servers',
+            'Amount of down servers pooled because too many down',
+            **metric_keywords),
+        'could_not_depool_total': Counter(
+            'could_not_depool_total',
+            'Pybal could not depool a server because too many down',
+            **metric_keywords),
+    }
+
     def __init__(self, lvsservice, configUrl):
         """Constructor"""
 
         self.servers = {}
         self.lvsservice = lvsservice
+        self.metric_labels = {
+            'service': self.lvsservice.name
+        }
         self.pooledDownServers = set()
         self.configHash = None
         self.serverConfigUrl = configUrl
@@ -358,11 +399,14 @@ class Coordinator:
         if self.canDepool():
             self.lvsservice.removeServer(server)
             self.pooledDownServers.discard(server)
+            self.metrics['servers_pooled'].labels(**self.metric_labels).dec()
         else:
             self.pooledDownServers.add(server)
             msg = "Could not depool server " \
                   "{} because of too many down!".format(server.host)
             log.error(msg, system=self.lvsservice.name)
+            self.metrics['could_not_depool_total'].labels(**self.metric_labels).inc()
+        self._updatePooledDownMetrics()
 
     def repool(self, server):
         """
@@ -374,12 +418,14 @@ class Coordinator:
 
         if not server.pooled:
             self.lvsservice.addServer(server)
+            self.metrics['servers_pooled'].labels(**self.metric_labels).inc()
         else:
             msg = "Leaving previously pooled but down server {} pooled"
             log.info(msg.format(server.host), system=self.lvsservice.name)
 
         # If it had been pooled in down state before, remove it from the list
         self.pooledDownServers.discard(server)
+        self._updatePooledDownMetrics()
 
         # See if we can depool any servers that could not be depooled before
         while len(self.pooledDownServers) > 0 and self.canDepool():
@@ -438,6 +484,10 @@ class Coordinator:
         # Wait for all new servers to finish initializing
         self.serverInitDeferredList = defer.DeferredList(initList).addCallback(self._serverInitDone)
 
+        # Update metrics
+        self._updateServerMetrics()
+        self._updatePooledDownMetrics()
+
     def _serverInitDone(self, result):
         """Called when all (new) servers have finished initializing"""
 
@@ -445,3 +495,33 @@ class Coordinator:
 
         # Assign the updated list of enabled servers to the LVSService instance
         self.assignServers()
+
+        self.metrics['servers_pooled'].labels(
+            **self.metric_labels
+            ).set(
+                len([s for s in self.servers.itervalues() if s.pooled]))
+        self._updatePooledDownMetrics()
+
+    def _updateServerMetrics(self):
+        """Update gauge metrics for servers on config change"""
+        self.metrics['servers'].labels(
+            **self.metric_labels
+            ).set(
+                len(self.servers))
+        self.metrics['servers_enabled'].labels(
+            **self.metric_labels
+            ).set(
+                len([s for s in self.servers.itervalues() if s.enabled]))
+        self.metrics['servers_up'].labels(
+            **self.metric_labels
+            ).set(
+                len([s for s in self.servers.itervalues() if s.up]))
+
+    def _updatePooledDownMetrics(self):
+        """Update gauge metrics for pooled-but-down servers"""
+        self.metrics['pooled_down_servers'].labels(
+            **self.metric_labels
+            ).set(len(self.pooledDownServers))
+        self.metrics['can_depool'].labels(
+            **self.metric_labels
+            ).set(self.canDepool() and 1 or 0)
