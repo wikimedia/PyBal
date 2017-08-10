@@ -6,6 +6,7 @@ Monitor class implementations for PyBal
 """
 
 from pybal import monitor, util
+from pybal.metrics import Gauge
 
 from twisted.internet import reactor, defer
 from twisted.web import client
@@ -49,6 +50,20 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
     from twisted.internet import error
     from twisted.web import error as weberror
     catchList = ( defer.TimeoutError, weberror.Error, error.ConnectError, error.DNSLookupError )
+
+    metric_labelnames = ('service', 'host', 'monitor')
+    metric_keywords = {
+        'namespace': 'pybal',
+        'subsystem': 'monitor_' + __name__.lower()
+    }
+
+    proxyfetch_metrics = {
+        'request_duration_seconds': Gauge(
+            'request_duration_seconds',
+            'HTTP(S) request duration',
+            labelnames=metric_labelnames + ('result',), # TODO: statuscode
+            **metric_keywords)
+    }
 
     def __init__(self, coordinator, server, configuration={}):
         """Constructor"""
@@ -115,8 +130,14 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
     def _fetchSuccessful(self, result):
         """Called when getProxyPage is finished successfully."""
 
-        self.report('Fetch successful, %.3f s' % (seconds() - self.checkStartTime))
+        duration = seconds() - self.checkStartTime
+        self.report('Fetch successful, %.3f s' % (duration))
         self._resultUp()
+
+        self.proxyfetch_metrics['request_duration_seconds'].labels(
+            result='successful',
+            **self.metric_labels
+            ).set(duration)
 
         return result
 
@@ -127,10 +148,16 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         if failure.check(defer.CancelledError):
             return None
 
-        self.report('Fetch failed, %.3f s' % (seconds() - self.checkStartTime),
+        duration = seconds() - self.checkStartTime
+        self.report('Fetch failed, %.3f s' % (duration),
                     level=logging.WARN)
 
         self._resultDown(failure.getErrorMessage())
+
+        self.proxyfetch_metrics['request_duration_seconds'].labels(
+            result='failed',
+            **self.metric_labels
+            ).set(duration)
 
         failure.trap(*self.catchList)
 
