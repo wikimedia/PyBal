@@ -7,11 +7,13 @@ Monitor class implementations for PyBal
 
 from pybal import monitor
 from pybal.util import log
+from pybal.metrics import Gauge
 
 import os, sys, signal, errno
 import logging
 
 from twisted.internet import reactor, process, error
+from twisted.python.runtime import seconds
 
 class ProcessGroupProcess(process.Process, object):
     """
@@ -89,6 +91,20 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
 
     TIMEOUT_RUN = 20
 
+    metric_labelnames = ('service', 'host', 'monitor')
+    metric_keywords = {
+        'namespace': 'pybal',
+        'subsystem': 'monitor_' + __name__.lower()
+    }
+
+    runcommand_metrics = {
+        'run_duration_seconds': Gauge(
+            'run_duration_seconds',
+            'Command duration',
+            labelnames=metric_labelnames + ('result', 'exitcode'),
+            **metric_keywords)
+    }
+
     def __init__(self, coordinator, server, configuration={}):
         """Constructor"""
 
@@ -131,6 +147,7 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
     def runCommand(self):
         """Periodically called method that does a single uptime check."""
 
+        self.checkStartTime = seconds()
         self.runningProcess = self._spawnProcess(self, self.command, [self.command] + self.arguments,
                                                  sessionLeader=True, timeout=(self.timeout or None))
 
@@ -157,10 +174,23 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         Called when the process has ended
         """
 
+        duration = seconds() - self.checkStartTime
         if reason.check(error.ProcessDone):
             self._resultUp()
+            result = 'successful'
+            exitcode = 0
         elif reason.check(error.ProcessTerminated):
             self._resultDown(reason.getErrorMessage())
+            result = 'failed'
+            exitcode = reason.value.exitCode
+        else:
+            result = None
+            exitcode = None
+
+        self.runcommand_metrics['run_duration_seconds'].labels(
+            result=result, exitcode=exitcode,
+            **self.metric_labels
+            ).set(duration)
 
         # Schedule the next check
         if self.active:
