@@ -5,13 +5,14 @@ Copyright (C) 2006 by Mark Bergsma <mark@nedworks.org>
 Monitor class implementations for PyBal
 """
 
-from pybal import monitor
+from pybal import monitor, util
 
 from twisted.internet import reactor, protocol
 import logging
 
 import socket
 
+log = util.log
 
 class IdleConnectionMonitoringProtocol(monitor.MonitoringProtocol, protocol.ReconnectingClientFactory):
     """
@@ -106,9 +107,12 @@ class IdleConnectionMonitoringProtocol(monitor.MonitoringProtocol, protocol.Reco
         if self.transport is not None and self.keepAlive:
             sock = self.transport.getHandle()
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-            sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, self.keepAliveIdle)
-            sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT, self.keepAliveRetries)
-            sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, self.keepAliveInterval)
+            try:
+                sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPIDLE, self.keepAliveIdle)
+                sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPCNT, self.keepAliveRetries)
+                sock.setsockopt(socket.SOL_TCP, socket.TCP_KEEPINTVL, self.keepAliveInterval)
+            except AttributeError:
+                log.warn("Could not set TCP_KEEPIDLE, TCP_KEEPCNT, TCP_KEEPINTVL socket options (not Linux?)")
 
         # Set status to up
         self._resultUp()
