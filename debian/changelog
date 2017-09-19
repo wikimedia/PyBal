@@ -1,3 +1,127 @@
+pybal (1.14.0) jessie-wikimedia; urgency=medium
+
+  * Add BGP MED support (Bug: T165764, T165584)
+    a6ae55449d6986d469e808d8b87d21158f59ccda
+
+  * Allow BGP socket to listen on specific IPs and port (Bug: T176182, T103882)
+    c5f284cb95a7c219eb1b61153500215d3566573f
+
+  * Add prometheus metrics (Bug: T171710)
+    2afb6e8904ecd1879b4106985d79962bf9ad587d
+
+  * Re-think the alerts instrumentation
+    8ecfb3c7c298f0f01a875d953df11daf76595d59
+
+  * Add warning for badly configured pools
+    7e0146fdd87860d0456b0b7eaff35511b6603622
+
+  * instrumentation: fixup for Ib0b3c139a
+    ba97fcb69c30bfd77fd3e02b12c1161108f64846
+
+  * Add notes on branching/releasing
+    314abec680bc8552a079464c7d1ae7698bc17473
+
+  * Add pyenv and pydev config files to .gitignore
+    c72db0233e838bb0451c6e726fd8141609ce558b
+
+  * Cleanup whitespace
+    248b5bd6c4b24a0fe7dc9669e9c4bbff098e2a69
+
+  * Use a bytearray to encode prefixes in BGP.encodePrefixes
+    3b3154ce6984d5d47b7d4e895d4125abe45bdc1b
+
+  * Use a bytearray to build IPPrefix
+    bf6e4ea8719ec8b53267ddce366ba1bffc3bbd15
+
+  * Create new BGP message classes for incremental construction
+    d9ff3fb5ac96a8881094de93f8a92321b085bbd4
+
+  * Adapt NaiveBGPPeering to support UPDATE message overflow
+    cac4528c0879fad4a718bc660348a76f3da05cc4
+
+  * Allow for withdrawals and NLRI to be sent in the same UPDATE
+    41810d3103e150e18499b872595cef5eecc9a501
+
+  * Add GPLv2 license header to bgp.py
+    8ab77f6424cf35ba0a1e15383c6dd9e2b1ed4a12
+
+  * Move BGP classes to bgp.bgp, IP classes to bgp.ip
+    8aef1d85416264f63869218f390805bb8c8598fc
+
+  * bgp: add a few unit tests
+    c27863ba6ab847f3074b96da175714c0fe21083a
+
+  * Add BGPUpdateMessage test cases
+    f1a4ca8e84adf50ecef146ca95e5ead8b813d2b6
+
+  * Add GPLv2 header to bgp/ip.py
+    297a08d4e6bd3d3dcf3d9a7c9705d2c9d5020cd2
+
+  * Fix IPPrefix IPv6 string padding bug
+    deed00cbafc4ea4ce3decd422dc90c707172dabc
+
+  * Add IPv4IP, IPv6IP and IPPrefix test cases
+    7ab50758e150c89bb051b9dccede9d41c079b9ba
+
+  * bgp.ip: do not crash on unicode strings
+    199e743a3a2dca81b02cedbc322006a08e03680e
+
+  * Move BGP tests into a sub package and add to pybal test suite
+    86b4087ad59b187d6cb3d96ab94d5025f1fa08ca
+
+  * Split up pybal.pybal in smaller files
+    e760192d3b3f38e1e2d034fb1854b3ca47674c0c
+
+  * Add some protocol BGP class test cases
+    05a3ef2f6a4c7602b8fb9ac6a88bd09336f03ebc
+
+  * Add bgp.ip unit test cases
+    0516b7b8f1cb8a9db755c5132d5564aec425f8dc
+
+  * Add basic unit tests for protocol BGP send methods
+    79a13854724d3cdae11fd67f2e0eb537cc724e6c
+
+  * Add BGP.parseOpen unit test cases
+    07f12ef7618c49fd27e3b78e93c2b1927687f494
+
+  * Fix IPPrefix value comparisons with different packed paddings
+    c7c8e8b7c1853b2ebd6ea13d9c0601304ec391ef
+
+  * Add basic BGP.parseUpdate test case
+    b0dda99e11ae7e3cff3f1a2e84e11c727f5af732
+
+  * Add BGP.parse{KeepAlive,Notification} test cases
+    083e823614c401fc57eca53310754ea566ef9194
+
+  * Add generic monitor metrics
+    664e3ad319d4edfa966587225c3866e8780d77b7
+
+  * Add monitoring specific metric to ProxyFetch
+    89bc7269a4fcc9dc44ae43dbff4668dfab8ed5df
+
+  * Add monitoring specific metric to DNSQuery
+    4c4e16faa625f5e6a22ccb3f6127aa4121b0d9d9
+
+  * Add monitoring specific metric to RunCommand
+    049446a087cae4c3804b05d35c136cb6d6755569
+
+  * Handle failing TCP socket options in IdleConnection
+    1feae403c67b3ee328ded19063c4a39c01f9b6f7
+
+  * Add monitoring specific metric to IdleConnection
+    9904aaa2b10a9d6d7f6fbc2437aea0be7f6973de
+
+  * coordinator: exit if exceptions are raised importing monitors
+    5e8e4577a1fe72781f524a929e606bf14a62cff9
+
+  * Add pybal service (coordinator) metrics
+    99c55e1fbd3643b166d17c76e39120b9d1245de2
+
+  * Add metric pybal_service_depool_threshold
+    2b428a53fec89fa38203bf5b8bb7eb58375b589b
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Tue, 19 Sep 2017 15:55:19 +0200
+
 pybal (1.13.11) jessie-wikimedia; urgency=medium
 
   * Instrumentation fixes
