@@ -17,7 +17,9 @@ from ConfigParser import SafeConfigParser, NoOptionError
 
 from twisted.internet import reactor
 
-from pybal import util, ipvs, instrumentation
+# Note: this etcd import here might look unused (and it is!) but is needed by
+# the magic performed by ConfigurationObserver.fromUrl
+from pybal import util, ipvs, instrumentation, etcd
 from pybal.bgpfailover import BGPFailover
 from pybal.coordinator import Coordinator
 
