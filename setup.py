@@ -35,6 +35,7 @@ setup(
     ),
     packages=(
         'pybal',
+        'pybal.bgp',
         'pybal.monitors',
     ),
     scripts=(
