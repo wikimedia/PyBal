@@ -2063,8 +2063,6 @@ class BGPPeering(BGPFactory):
 
             if protocol is self.estabProtocol:
                 self.estabProtocol = None
-                # self.fsm should still be valid and set to ST_IDLE
-                assert self.fsm.state == ST_IDLE
 
         if self.fsm.allowAutomaticStart: self.automaticStart(idleHold=True)
 
