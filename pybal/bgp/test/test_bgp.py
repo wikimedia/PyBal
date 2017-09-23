@@ -254,3 +254,56 @@ class BGPTestCase(unittest.TestCase):
             (bgp.ERR_MSG_UPDATE, bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH, b"Unit test"))
         # Verify a truncated message raises BadMessageLength
         self.assertRaises(bgp.BadMessageLength, self.proto.parseNotification, b' ')
+
+class NaiveBGPPeeringTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.peering = bgp.NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
+        self.peering.addressFamilies = set([(1, 1), (2, 1)])
+        self.peering.fsm.state = bgp.ST_ESTABLISHED
+
+        proto = bgp.BGP()
+        proto.transport = proto_helpers.StringTransportWithDisconnection()
+        self.peering.estabProtocol = proto
+
+        self.peering.toAdvertise = {(1, 1): set([]),
+                                    (2, 1): set([])}
+
+        med = bgp.MEDAttribute(50)
+        aspath = bgp.ASPathAttribute([(2, [64496])])
+        origin = bgp.OriginAttribute((0))
+
+        self.attrs = {
+            bgp.MEDAttribute: med,
+            bgp.ASPathAttribute: aspath,
+            bgp.OriginAttribute: origin,
+        }
+
+    def testSetV4Advertisements(self):
+        nexthop = bgp.NextHopAttribute('10.192.16.139')
+
+        self.attrs[bgp.NextHopAttribute] = nexthop
+
+        adv_v4 = bgp.Advertisement(prefix=ip.IPv4IP('10.2.1.18'),
+                                   attributes=self.attrs,
+                                   addressfamily=(1, 1))
+
+        self.peering.advertised = { (1, 1): set([ adv_v4 ]),
+                                    (2, 1): set([]) }
+
+        self.peering.setAdvertisements(set())
+
+    def testSetV6Advertisements(self):
+        nlri = bgp.MPReachNLRIAttribute((bgp.AFI_INET6, bgp.SAFI_UNICAST,
+            bgp.IPv6IP('2620:0:860:101:10:192:1:3'), []))
+
+        self.attrs[bgp.MPReachNLRIAttribute] = nlri
+
+        adv_v6 = bgp.Advertisement(prefix=ip.IPv6IP('2620:0:860:ed1a:0:0:0:1'),
+                                   attributes=self.attrs,
+                                   addressfamily=(2, 1))
+
+        self.peering.advertised = { (1, 1): set([]),
+                                    (2, 1): set([ adv_v6 ]) }
+
+        self.peering.setAdvertisements(set())
