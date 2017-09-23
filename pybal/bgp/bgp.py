@@ -682,7 +682,7 @@ class MPUnreachNLRIAttribute(BaseMPAttribute):
 
     def encode(self):
         afi, safi, nlri = self.value
-        encodedNLRI = BGP.encodedPrefixes(nlri)
+        encodedNLRI = BGP.encodePrefixes(nlri)
         length = 3 + len(encodedNLRI)
 
         return struct.pack('!BBHHB', self.flags(), self.typeCode, length, afi, safi) + encodedNLRI
@@ -2395,15 +2395,18 @@ class NaiveBGPPeering(BGPPeering):
 
         # Construct MPUnreachNLRI for withdrawals and send them
 
-        while len(withdrawals) > 0:
+        withdrawalPrefixSet = set([w.prefix for w in withdrawals])
+
+        while len(withdrawalPrefixSet) > 0:
             bgpupdate = BGPUpdateMessage()
             unreachAttr = MPUnreachNLRIAttribute((afi, safi, []))
+
             prefixesAdded = unreachAttr.addSomePrefixes(
-                prefixSet=set([w.prefix for w in withdrawals[addressfamily]]),
+                prefixSet=withdrawalPrefixSet,
                 maxLen=bgpupdate.freeSpace())
             if prefixesAdded == 0:
                 raise ValueError("Could not add any prefixes to MPUnreachNLRI attribute")
-            bgpupdate.addAttributes(FrozenAttributeDict(unreachAttr))
+            bgpupdate.addAttributes(FrozenAttributeDict([unreachAttr]))
             self.estabProtocol.sendMessage(bgpupdate)
 
         # Move NLRI into MPReachNLRI attributes and send them
