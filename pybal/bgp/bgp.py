@@ -2269,7 +2269,7 @@ class NaiveBGPPeering(BGPPeering):
         self.toAdvertise = {}
         for af in self.addressFamilies:
             self.advertised.setdefault(af, set())
-            self.toAdvertise[af] = set([ad for ad in iter(advertisements) if ad.addressfamily == af])
+            self.toAdvertise[af] = {ad for ad in iter(advertisements) if ad.addressfamily == af}
 
         # Try to send
         self._sendUpdates(*self._calculateChanges())
@@ -2332,8 +2332,8 @@ class NaiveBGPPeering(BGPPeering):
         """
 
         for attributes, advertisements in attributeMap.iteritems():
-            withdrawalPrefixSet = set([w.prefix for w in withdrawals])
-            adPrefixSet = set([ad.prefix for ad in advertisements])
+            withdrawalPrefixSet = {w.prefix for w in withdrawals}
+            adPrefixSet = {ad.prefix for ad in advertisements}
 
             bgpupdate = BGPUpdateMessage()
             # Start with withdrawals, if there are any
@@ -2395,7 +2395,7 @@ class NaiveBGPPeering(BGPPeering):
 
         # Construct MPUnreachNLRI for withdrawals and send them
 
-        withdrawalPrefixSet = set([w.prefix for w in withdrawals])
+        withdrawalPrefixSet = {w.prefix for w in withdrawals}
 
         while len(withdrawalPrefixSet) > 0:
             bgpupdate = BGPUpdateMessage()
@@ -2419,7 +2419,7 @@ class NaiveBGPPeering(BGPPeering):
             except KeyError:
                 raise ValueError("Missing MPReachNLRIAttribute")
 
-            adPrefixSet = set([ad.prefix for ad in advertisements])
+            adPrefixSet = {ad.prefix for ad in advertisements}
             while len(adPrefixSet) > 0:
                 bgpupdate = BGPUpdateMessage()
                 # We need to add the complete set of attributes besides
