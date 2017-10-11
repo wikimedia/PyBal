@@ -100,7 +100,13 @@ class AlertsTestCase(WebBaseTestCase):
         self.assertEquals('WARNING - Pool test_pool0 is too small to allow depooling. ',
                           r.render_GET(self.request))
 
+        # Pool with one server only
+        crd.servers = [m1]
+        self.assertEquals('OK - All pools are healthy',
+                          r.render_GET(self.request))
+
         # Pool with too many servers down
+        crd.servers = [m1, m2, m3]
         crd.pooledDownServers = [m1, m2]
         self.assertEquals('CRITICAL - test_pool0: Servers mw1001, mw1002 are marked down but pooled',
                           r.render_GET(self.request))
