@@ -1,3 +1,10 @@
+pybal (1.14.1) jessie-wikimedia; urgency=medium
+
+  * instrumentation: pools with one server are not misconfigured (Bug: T177815)
+    cb1389bccbf9c44380d37162a83b38e435bde813
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Thu, 12 Oct 2017 11:46:28 +0200
+
 pybal (1.14.0) jessie-wikimedia; urgency=medium
 
   * Add BGP MED support (Bug: T165764, T165584)
