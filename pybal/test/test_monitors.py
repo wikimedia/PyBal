@@ -10,6 +10,7 @@
 import pybal.util
 from pybal.monitors.idleconnection import IdleConnectionMonitoringProtocol
 from pybal.monitors.dnsquery import DNSQueryMonitoringProtocol
+from pybal.monitors.runcommand import RunCommandMonitoringProtocol
 
 from twisted.internet import defer
 from twisted.internet.reactor import getDelayedCalls
@@ -188,3 +189,34 @@ class DNSQueryMonitoringProtocolTestCase(PyBalTestCase):
     def testQueryFailedUnknownError(self):
         self.__testQuery(expectSuccess=False,
                          fakeResolver=FakeResolverUnknownError)
+
+
+class RunCommandMonitoringProtocolTestCase(PyBalTestCase):
+    """Test case for `pybal.monitors.RunCommandMonitoringProtocol`."""
+
+    def setUp(self):
+        super(RunCommandMonitoringProtocolTestCase, self).setUp()
+        self.config = pybal.util.ConfigDict()
+        self.config['runcommand.command'] = '/bin/true'
+
+    def testInit(self):
+        self.config['runcommand.arguments'] = '[ "--help" ]'
+        self.monitor = RunCommandMonitoringProtocol(
+            self.coordinator, self.server, self.config)
+
+        self.assertEquals(self.monitor.intvCheck,
+                          RunCommandMonitoringProtocol.INTV_CHECK)
+        self.assertEquals(self.monitor.timeout,
+                          RunCommandMonitoringProtocol.TIMEOUT_RUN)
+        self.assertEquals(self.monitor.arguments, ["--help",])
+
+    def testInitNoArguments(self):
+        self.monitor = RunCommandMonitoringProtocol(
+            self.coordinator, self.server, self.config)
+        self.assertEquals(self.monitor.arguments, [""])
+
+    def testInitArgumentsNotStringList(self):
+        self.config['runcommand.arguments'] = "[]"
+        self.monitor = RunCommandMonitoringProtocol(
+            self.coordinator, self.server, self.config)
+        self.assertEquals(self.monitor.arguments, [""])

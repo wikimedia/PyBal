@@ -117,7 +117,13 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.timeout = self._getConfigInt('timeout', self.TIMEOUT_RUN)
         self.command = self._getConfigString('command')
-        self.arguments = self._getConfigStringList('arguments', locals=locals)
+        try:
+            self.arguments = self._getConfigStringList('arguments', locals=locals)
+        except (KeyError, ValueError):
+            # Default to empty stringlist if runcommand.arguments has not been
+            # specified or if it is an empty list
+            self.arguments = [""]
+
         self.logOutput = self._getConfigBool('log-output', True)
 
         self.checkCall = None
