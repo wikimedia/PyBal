@@ -1,3 +1,10 @@
+pybal (1.14.2) jessie-wikimedia; urgency=medium
+
+  * runcommand: do not crash on empty runcommand.arguments (Bug: T178149)
+    2c71344b3f6dfae7a2659bcc925fc746af7b0dca
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Mon, 16 Oct 2017 11:34:32 +0200
+
 pybal (1.14.1) jessie-wikimedia; urgency=medium
 
   * instrumentation: pools with one server are not misconfigured (Bug: T177815)
