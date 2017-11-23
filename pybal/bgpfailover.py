@@ -18,23 +18,23 @@ except ImportError:
 
 
 class BGPFailover:
-    """Class for maintaining a BGP session to a router for IP address failover"""
+    """Class for maintaining BGP sessions to routers for IP address failover"""
 
     prefixes = {}
-    peerings = []
+    peerings = {}
 
     def __init__(self, globalConfig):
-        self.globalConfig = globalConfig
+        if not globalConfig.getboolean('bgp', False):
+            return
 
-        if self.globalConfig.getboolean('bgp', False):
-            self.setup()
+        self.globalConfig = globalConfig
+        self.setup()
 
     def setup(self):
         try:
-            self.bgpPeering = bgp.NaiveBGPPeering(myASN=self.globalConfig.getint('bgp-local-asn'),
-                                                  peerAddr=self.globalConfig.get('bgp-peer-address'))
-
-            asPath = [int(asn) for asn in self.globalConfig.get('bgp-as-path', str(self.bgpPeering.myASN)).split()]
+            myASN = self.globalConfig.getint('bgp-local-asn')
+            asPath = self.globalConfig.get('bgp-as-path', str(myASN))
+            asPath = [int(asn) for asn in asPath.split()]
             med = self.globalConfig.getint('bgp-med', 0)
             baseAttrs = [bgp.OriginAttribute(), bgp.ASPathAttribute(asPath)]
             if med: baseAttrs.append(bgp.MEDAttribute(med))
@@ -59,15 +59,25 @@ class BGPFailover:
                                   for af in attributes.keys()
                                   for prefix in BGPFailover.prefixes.get(af, set())])
 
-            self.bgpPeering.setEnabledAddressFamilies(set(attributes.keys()))
-            self.bgpPeering.setAdvertisements(advertisements)
-            self.bgpPeering.automaticStart()
+            bgpPeerAddress = self.globalConfig.get('bgp-peer-address', '').strip()
+            if bgpPeerAddress[0] != '[': bgpPeerAddress = "[ \"{}\" ]".format(bgpPeerAddress)
+            peerAddresses = eval(bgpPeerAddress)
+            assert isinstance(peerAddresses, list)
+
+            for peerAddr in peerAddresses:
+                peering = bgp.NaiveBGPPeering(myASN, peerAddr)
+                peering.setEnabledAddressFamilies(set(attributes.keys()))
+                peering.setAdvertisements(advertisements)
+
+                log.info("Starting BGP session with peer {}".format(peerAddr))
+                peering.automaticStart()
+                self.peerings[peerAddr] = peering
+                reactor.addSystemEventTrigger('before', 'shutdown', self.closeSession, peering)
+
         except Exception:
-            log.critical("Could not set up BGP peering instance.")
+            log.critical("Could not set up BGP peering instances.")
             raise
         else:
-            BGPFailover.peerings.append(self.bgpPeering)
-            reactor.addSystemEventTrigger('before', 'shutdown', self.closeSession, self.bgpPeering)
 
             # Bind on the IPs listed in 'bgp_local_ips'. Default to
             # localhost v4 and v6 if no IPs have been specified in the
@@ -79,7 +89,7 @@ class BGPFailover:
                 try:
                     reactor.listenTCP(
                         bgp_local_port,
-                        bgp.BGPServerFactory({self.bgpPeering.peerAddr: self.bgpPeering}),
+                        bgp.BGPServerFactory(self.peerings),
                         interface=ip)
                 except CannotListenError as e:
                     log.critical(
