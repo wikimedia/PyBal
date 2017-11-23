@@ -11,10 +11,7 @@ from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 
 from pybal.util import log
-try:
-    from pybal.bgp import bgp
-except ImportError:
-    pass
+from pybal.bgp import bgp
 
 
 class BGPFailover:
@@ -22,51 +19,51 @@ class BGPFailover:
 
     prefixes = {}
     peerings = {}
+    ipServices = {}
 
     def __init__(self, globalConfig):
+        # Store globalconfig so setup() can check whether BGP is enabled.
+        self.globalConfig = globalConfig
         if not globalConfig.getboolean('bgp', False):
             return
 
-        self.globalConfig = globalConfig
-        self.setup()
+        self._parseConfig()
+
+    def _parseConfig(self):
+        self.myASN = self.globalConfig.getint('bgp-local-asn')
+        self.asPath = self.globalConfig.get('bgp-as-path', str(self.myASN))
+        self.asPath = [int(asn) for asn in self.asPath.split()]
+
+        self.defaultMED = self.globalConfig.getint('bgp-med', 0)
+
+        try:
+            self.nexthopIPv4 = self.globalConfig['bgp-nexthop-ipv4']
+        except KeyError:
+            if (bgp.AFI_INET, bgp.SAFI_UNICAST) in BGPFailover.prefixes:
+                raise ValueError("IPv4 BGP NextHop (global configuration variable 'bgp-nexthop-ipv4') not set")
+
+        try:
+            self.nexthopIPv6 = self.globalConfig['bgp-nexthop-ipv6']
+        except KeyError:
+            if (bgp.AFI_INET6, bgp.SAFI_UNICAST) in BGPFailover.prefixes:
+                raise ValueError("IPv6 BGP NextHop (global configuration variable 'bgp-nexthop-ipv6') not set")
+
+        bgpPeerAddress = self.globalConfig.get('bgp-peer-address', '').strip()
+        if not bgpPeerAddress.startswith('['):
+            bgpPeerAddress = "[ \"{}\" ]".format(bgpPeerAddress)
+        self.peerAddresses = eval(bgpPeerAddress)
+        assert isinstance(self.peerAddresses, list)
 
     def setup(self):
+        if not self.globalConfig.getboolean('bgp', False):
+            return
+
         try:
-            myASN = self.globalConfig.getint('bgp-local-asn')
-            asPath = self.globalConfig.get('bgp-as-path', str(myASN))
-            asPath = [int(asn) for asn in asPath.split()]
-            med = self.globalConfig.getint('bgp-med', 0)
-            baseAttrs = [bgp.OriginAttribute(), bgp.ASPathAttribute(asPath)]
-            if med: baseAttrs.append(bgp.MEDAttribute(med))
+            advertisements = self.buildAdvertisements()
 
-            attributes = {}
-            try:
-                attributes[(bgp.AFI_INET, bgp.SAFI_UNICAST)] = bgp.FrozenAttributeDict(baseAttrs + [
-                    bgp.NextHopAttribute(self.globalConfig['bgp-nexthop-ipv4'])])
-            except KeyError:
-                if (bgp.AFI_INET, bgp.SAFI_UNICAST) in BGPFailover.prefixes:
-                    raise ValueError("IPv4 BGP NextHop (global configuration variable 'bgp-nexthop-ipv4') not set")
-
-            try:
-                attributes[(bgp.AFI_INET6, bgp.SAFI_UNICAST)] = bgp.FrozenAttributeDict(baseAttrs + [
-                    bgp.MPReachNLRIAttribute((bgp.AFI_INET6, bgp.SAFI_UNICAST,
-                                             bgp.IPv6IP(self.globalConfig['bgp-nexthop-ipv6']), []))])
-            except KeyError:
-                if (bgp.AFI_INET6, bgp.SAFI_UNICAST) in BGPFailover.prefixes:
-                    raise ValueError("IPv6 BGP NextHop (global configuration variable 'bgp-nexthop-ipv6') not set")
-
-            advertisements = set([bgp.Advertisement(prefix, attributes[af], af)
-                                  for af in attributes.keys()
-                                  for prefix in BGPFailover.prefixes.get(af, set())])
-
-            bgpPeerAddress = self.globalConfig.get('bgp-peer-address', '').strip()
-            if bgpPeerAddress[0] != '[': bgpPeerAddress = "[ \"{}\" ]".format(bgpPeerAddress)
-            peerAddresses = eval(bgpPeerAddress)
-            assert isinstance(peerAddresses, list)
-
-            for peerAddr in peerAddresses:
-                peering = bgp.NaiveBGPPeering(myASN, peerAddr)
-                peering.setEnabledAddressFamilies(set(attributes.keys()))
+            for peerAddr in self.peerAddresses:
+                peering = bgp.NaiveBGPPeering(self.myASN, peerAddr)
+                peering.setEnabledAddressFamilies(set(self.prefixes.keys()))
                 peering.setAdvertisements(advertisements)
 
                 log.info("Starting BGP session with peer {}".format(peerAddr))
@@ -102,13 +99,53 @@ class BGPFailover:
         peering.setAdvertisements(set())
         return peering.manualStop()
 
-    @classmethod
-    def addPrefix(cls, prefix):
-        try:
-            if ':' not in prefix:
-                cls.prefixes.setdefault((bgp.AFI_INET, bgp.SAFI_UNICAST), set()).add(bgp.IPv4IP(prefix))
+    def buildAdvertisements(self):
+        baseAttrs = bgp.AttributeDict([bgp.OriginAttribute(), bgp.ASPathAttribute(self.asPath)])
+
+        advertisements = set()
+        for af in self.prefixes:
+            afAttrs = bgp.AttributeDict(baseAttrs)
+            if af[0] == (bgp.AFI_INET):
+                afAttrs[bgp.NextHopAttribute] = bgp.NextHopAttribute(self.nexthopIPv4)
+            elif af[0] == (bgp.AFI_INET6):
+                afAttrs[bgp.MPReachNLRIAttribute] = bgp.MPReachNLRIAttribute((af, bgp.IPv6IP(self.nexthopIPv6), []))
             else:
-                cls.prefixes.setdefault((bgp.AFI_INET6, bgp.SAFI_UNICAST), set()).add(bgp.IPv6IP(prefix))
-        except NameError:
-            # bgp not imported
-            pass
+                raise ValueError("Unsupported address family {}".format(af))
+
+            for prefix in self.prefixes[af]:
+                attributes = bgp.AttributeDict(afAttrs)
+                # This service IP may use a non-default MED
+                med = self.ipServices[prefix][0]['med'] # Guaranteed to exist, may be None
+                if med is None:
+                    attributes[bgp.MEDAttribute] = bgp.MEDAttribute(self.defaultMED)
+                else:
+                    attributes[bgp.MEDAttribute] = bgp.MEDAttribute(med)
+
+                attributes = bgp.FrozenAttributeDict(attributes)
+                advertisements.add(bgp.Advertisement(prefix, attributes, af))
+
+        return advertisements
+
+    @classmethod
+    def associateService(cls, ip, lvsservice, med):
+        if ':' not in ip:
+            af = (bgp.AFI_INET, bgp.SAFI_UNICAST)
+            prefix = bgp.IPv4IP(ip)
+        else:
+            af = (bgp.AFI_INET6, bgp.SAFI_UNICAST)
+            prefix = bgp.IPv6IP(ip)
+
+        # All services need to agree on the same MED for this IP
+        if prefix in cls.ipServices and not med == cls.ipServices[prefix][0]['med']:
+            raise ValueError(
+                "LVS service {} MED value {} differs from other MED values for IP {}".format(
+                lvsservice.name, med, ip))
+
+        service_state = {
+            'lvsservice': lvsservice,
+            'af': af,
+            'med': med
+        }
+
+        cls.ipServices.setdefault(prefix, []).append(service_state)
+        cls.prefixes.setdefault(af, set()).add(prefix)

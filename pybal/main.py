@@ -125,6 +125,7 @@ def main():
             util.PyBalLogObserver.level = logging.INFO
 
         bgpannouncement = BGPFailover(configdict)
+        bgpannouncement.setup()
 
         # Run the web server for instrumentation
         if configdict.getboolean('instrumentation', False):

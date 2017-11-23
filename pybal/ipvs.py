@@ -192,9 +192,12 @@ class LVSService:
         self.ipvsManager.DryRun = configuration.getboolean('dryrun', False)
         self.ipvsManager.Debug = configuration.getboolean('debug', False)
 
-        if self.configuration.getboolean('bgp', True):
-            # Add service ip to the BGP announcements
-            BGPFailover.addPrefix(self.ip)
+        # Per-service BGP is enabled by default but BGP can be disabled globally
+        if configuration.getboolean('bgp', True):
+            # Pass a per-service(-ip) MED if one is provided
+            med = configuration.get('bgp-med', None)
+            # Associate service ip to this coordinator for BGP announcements
+            BGPFailover.associateService(self.ip, self, med)
 
         self.createService()
 
