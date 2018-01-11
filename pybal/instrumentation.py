@@ -90,7 +90,10 @@ class Alerts(Resource):
         if wantJson(request):
             return json.dumps(resp)
         else:
-            return "%s - %s" % (resp['status'].upper(), resp['msg'])
+            # Twisted returns a 500 if the returned body is not an instance of
+            # 'bytes'. 'unicode' values are not. Make sure we return a 'str'
+            # instead. See https://phabricator.wikimedia.org/T184721
+            return str("%s - %s" % (resp['status'].upper(), resp['msg']))
 
 class PoolsRoot(Resource):
     """Pools base resource.
