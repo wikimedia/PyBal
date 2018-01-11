@@ -442,11 +442,21 @@ class Coordinator:
     def canDepool(self):
         """Returns a boolean denoting whether another server can be depooled"""
 
-        # Construct a list of servers that have status 'down'
-        downServers = [server for server in self.servers.itervalues() if not server.up]
+        # Total number of servers
+        totalServerCount = len(self.servers)
 
-        # The total amount of pooled servers may never drop below a configured threshold
-        return len(self.servers) - len(downServers) >= len(self.servers) * self.lvsservice.getDepoolThreshold()
+        # Number of hosts considered to be up by PyBal's monitoring and
+        # administratively enabled. Under normal circumstances, they would be
+        # the hosts serving traffic.
+        # However, a host can go down after PyBal has reached the depool
+        # threshold for the service the host belongs to. In that case, the
+        # misbehaving server is kept pooled. This count does not include such
+        # hosts.
+        upServerCount = len([server for server in self.servers.itervalues() if server.up and server.enabled])
+
+        # The total amount of hosts serving traffic may never drop below a
+        # configured threshold
+        return upServerCount >= totalServerCount * self.lvsservice.getDepoolThreshold()
 
     def onConfigUpdate(self, config):
         """Parses the server list and changes the state accordingly."""
