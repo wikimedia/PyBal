@@ -9,6 +9,7 @@
 import mock
 
 import pybal.coordinator
+import pybal.server
 import pybal.util
 
 from twisted.internet.reactor import getDelayedCalls
@@ -30,7 +31,7 @@ class CoordinatorTestCase(PyBalTestCase):
         self.coordinator.lvsservice.getDepoolThreshold = mock.MagicMock(
                 return_value=0.5)
 
-        pybal.coordinator.Server.initialize = mock.MagicMock()
+        pybal.server.Server.initialize = mock.MagicMock()
 
     def tearDown(self):
         self.coordinator.configObserver.reloadTask.stop()

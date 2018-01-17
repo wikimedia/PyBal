@@ -3,7 +3,7 @@
   PyBal unit tests
   ~~~~~~~~~~~~~~~~
 
-  This module contains tests for `pybal.coordinator.Server`.
+  This module contains tests for `pybal.server.Server`.
 
 """
 
@@ -17,12 +17,12 @@ from twisted.internet.reactor import getDelayedCalls
 from .fixtures import PyBalTestCase
 
 class ServerTestCase(PyBalTestCase):
-    """Test case for `pybal.coordinator.Server`."""
+    """Test case for `pybal.server.Server`."""
 
     def setUp(self):
         super(ServerTestCase, self).setUp()
 
-        self.server = pybal.coordinator.Server(
+        self.server = pybal.server.Server(
             'example.com', mock.MagicMock())
 
         self.mockMonitor = mock.MagicMock()
@@ -124,5 +124,5 @@ class ServerTestCase(PyBalTestCase):
             hostName=self.exampleConfigDict['host'],
             configuration=self.exampleConfigDict,
             lvsservice=mock.MagicMock())
-        self.assertTrue(isinstance(server, pybal.coordinator.Server))
+        self.assertTrue(isinstance(server, pybal.server.Server))
         self.assertFalse(server.modified)
