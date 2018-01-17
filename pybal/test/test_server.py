@@ -9,12 +9,12 @@
 
 import mock
 
-import pybal.coordinator
+import pybal.server
 
 from twisted.python import failure
 from twisted.internet.reactor import getDelayedCalls
 
-from .fixtures import PyBalTestCase
+from .fixtures import PyBalTestCase, StubLVSService
 
 class ServerTestCase(PyBalTestCase):
     """Test case for `pybal.server.Server`."""
@@ -23,9 +23,10 @@ class ServerTestCase(PyBalTestCase):
         super(ServerTestCase, self).setUp()
 
         self.server = pybal.server.Server(
-            'example.com', mock.MagicMock())
+            'example.com', self.lvsservice)
 
         self.mockMonitor = mock.MagicMock()
+        self.mockCoordinator = mock.MagicMock()
         self.server.addMonitor(self.mockMonitor)
 
         self.exampleConfigDict = {
@@ -40,6 +41,26 @@ class ServerTestCase(PyBalTestCase):
         for call in getDelayedCalls():
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
+
+    def testEq(self):
+        self.assertEquals(self.server, self.server)
+
+        # Create a Server instance with different hostname
+        otherServer = pybal.server.Server('other.example.com', self.lvsservice)
+        self.assertNotEqual(self.server, otherServer)
+
+        # Create a Server instance with equal hostname but different LVSService
+        otherLVSService = StubLVSService(
+            'otherservice',
+            (self.protocol, self.ip, self.port, self.scheduler),
+            self.config)
+        otherServer = pybal.server.Server('example.com', otherLVSService)
+        self.assertNotEqual(self.server, otherServer)
+
+    def testHash(self):
+        # Create a Server instance with different hostname
+        otherServer = pybal.server.Server('other.example.com', self.lvsservice)
+        self.assertNotEqual(hash(self.server), hash(otherServer))
 
     def testAddMonitor(self):
         self.assertIn(self.mockMonitor, self.server.monitors)
@@ -68,9 +89,31 @@ class ServerTestCase(PyBalTestCase):
             self.assertEquals(self.server.ready, result)
 
         self.server.createMonitoringInstances = mock.MagicMock()
-        deferred = self.server.initialize(coordinator=mock.MagicMock())
+        deferred = self.server.initialize(self.mockCoordinator)
         deferred.addCallback(callback)
         return deferred
+
+    @mock.patch('pybal.server.Server.createMonitoringInstances')
+    def testReady(self, mock_createMonitoringInstances):
+        r = self.server._ready(True, self.mockCoordinator)
+        self.assertTrue(r)
+        self.assertTrue(self.server.ready)
+        mock_createMonitoringInstances.assert_called()
+
+    def testInitFailed(self):
+        r = self.server._initFailed(failure.Failure(Exception("Fake failure")))
+        self.assertFalse(r)
+        self.assertFalse(self.server.ready)
+
+    def testCreateMonitoringInstances(self):
+        assert 'monitors' not in self.config
+        self.assertRaises(KeyError,
+            self.server.createMonitoringInstances, self.mockCoordinator)
+
+        self.config['monitors'] = "[ \"NonexistentMonitor\" ]"
+        self.server.createMonitoringInstances(self.mockCoordinator)
+
+        # TODO: test creation of a (mock) monitor
 
     def testCalcStatus(self):
         self.mockMonitor.up = True
@@ -94,6 +137,11 @@ class ServerTestCase(PyBalTestCase):
         self.server.removeMonitors()
         self.assertFalse(self.server.calcStatus())
         self.assertTrue(self.server.calcPartialStatus())
+
+    def testTextStatus(self):
+        textStatus = self.server.textStatus()
+        self.assertTrue(isinstance(textStatus, str))
+        self.assertEquals(len(textStatus.split('/')), 3)
 
     def testMaintainState(self):
         self.server.pooled = True
