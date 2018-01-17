@@ -1,3 +1,13 @@
+pybal (1.14.3) jessie-wikimedia; urgency=medium
+
+  * Use up-and-enabled servers in can-depool logic (Bug: T184715)
+    1264a784bbcbedee37466102246775e2ee26367a
+
+  * Alerts instrumentation: return instance of bytes (Bug: T184721)
+    3505626c9d1590e84525560edbc2f5bf01a7be99
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Wed, 17 Jan 2018 16:49:48 +0100
+
 pybal (1.14.2) jessie-wikimedia; urgency=medium
 
   * runcommand: do not crash on empty runcommand.arguments (Bug: T178149)
