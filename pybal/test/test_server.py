@@ -14,7 +14,7 @@ import pybal.server
 
 from twisted.python import failure
 from twisted.names.error import AuthoritativeDomainError
-from twisted.internet.reactor import getDelayedCalls
+from twisted.internet import reactor
 
 from .fixtures import PyBalTestCase, StubLVSService
 
@@ -39,7 +39,7 @@ class ServerTestCase(PyBalTestCase):
         }
 
     def tearDown(self):
-        for call in getDelayedCalls():
+        for call in reactor.getDelayedCalls():
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
 
@@ -133,7 +133,19 @@ class ServerTestCase(PyBalTestCase):
         self.config['monitors'] = "[ \"NonexistentMonitor\" ]"
         self.server.createMonitoringInstances(self.mockCoordinator)
 
-        # TODO: test creation of a (mock) monitor
+    def testCreateMockMonitoringInstance(self):
+        self.config['monitors'] = "[ \"Mock\" ]"
+        self.server.createMonitoringInstances(self.mockCoordinator)
+        self.assertTrue(self.server.monitors)
+        self.assertTrue(all({m.active for m in self.server.monitors}))
+
+    @mock.patch('twisted.internet.reactor.stop')
+    @mock.patch('importlib.import_module')
+    def testCreateFailingMockMonitoringInstance(self, mocked_import_module, mock_reactor):
+        mocked_import_module.side_effect = RuntimeError("Similating runtime error to aid unit testing")
+        self.config['monitors'] = "[ \"Mock\" ]"
+        self.server.createMonitoringInstances(self.mockCoordinator)
+        self.assertTrue(mock_reactor.assert_called)
 
     def testCalcStatus(self):
         self.mockMonitor.up = True
