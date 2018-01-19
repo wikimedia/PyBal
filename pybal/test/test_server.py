@@ -8,6 +8,7 @@
 """
 
 import mock
+import socket
 
 import pybal.server
 
@@ -41,6 +42,13 @@ class ServerTestCase(PyBalTestCase):
         for call in getDelayedCalls():
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
+
+    def testInit(self):
+        self.assertEquals(self.server.addressFamily, socket.AF_INET)
+
+        server = pybal.server.Server(
+            'example.com', self.lvsservice, addressFamily=socket.AF_INET6)
+        self.assertEquals(server.addressFamily, socket.AF_INET6)
 
     def testEq(self):
         self.assertEquals(self.server, self.server)
