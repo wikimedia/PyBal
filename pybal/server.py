@@ -28,7 +28,7 @@ class Server:
     DEF_WEIGHT = 10
 
     # Set of attributes allowed to be overridden in a server list
-    allowedConfigKeys = [ ('host', str), ('weight', int), ('enabled', bool) ]
+    allowedConfigKeys = { ('host', str), ('weight', int), ('enabled', bool) }
 
     def __init__(self, host, lvsservice, addressFamily=None):
         """Constructor"""
@@ -243,12 +243,15 @@ class Server:
     def merge(self, configuration):
         """Merges in configuration from a dictionary of (allowed) attributes"""
 
-        for key, value in configuration.iteritems():
-            if (key, type(value)) not in self.allowedConfigKeys:
-                del configuration[key]
-
+        # Ensure only known attributes of the right type can be set
+        # in the server object. (Some config parsing formats currently
+        # have no input validation.)
+        filteredConfig = {k:v
+            for (k,v)
+            in configuration.iteritems()
+            if (k, type(v)) in self.allowedConfigKeys}
         # Overwrite configuration
-        self.__dict__.update(configuration)
+        self.__dict__.update(filteredConfig)
         self.maintainState()
         self.modified = True    # Indicate that this instance previously existed
 

@@ -34,8 +34,7 @@ class ServerTestCase(PyBalTestCase):
             'host': "example1.example.com",
             'weight': 66,
             'enabled': True,
-            # FIXME: bug in Server.merge
-            #'rogue': "this attribute should not be merged"
+            'rogue': "this attribute should not be merged"
         }
 
     def tearDown(self):
@@ -168,10 +167,17 @@ class ServerTestCase(PyBalTestCase):
         self.assertFalse(self.server.up)
 
     def testMerge(self):
+        # Test whether (only!) valid config keys get
+        # set on the Server object
         self.server.merge(self.exampleConfigDict)
         self.assertEquals(self.server.host, self.exampleConfigDict['host'])
         self.assertEquals(self.server.weight, self.exampleConfigDict['weight'])
         self.assertEquals(self.server.enabled, self.exampleConfigDict['enabled'])
+        # Make sure invalid config key 'rogue' didn't make it
+        self.assertNotIn(self.exampleConfigDict['rogue'], self.server.__dict__)
+        del self.exampleConfigDict['rogue']
+        # self.server.__dict__ should now be a superset of self.exampleConfigDict,
+        # as all remaining keys are valid
         self.assertDictContainsSubset(self.exampleConfigDict, self.server.__dict__)
 
     def testDumpState(self):
