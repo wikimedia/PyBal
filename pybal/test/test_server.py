@@ -12,6 +12,7 @@ import mock
 import pybal.server
 
 from twisted.python import failure
+from twisted.names.error import AuthoritativeDomainError
 from twisted.internet.reactor import getDelayedCalls
 
 from .fixtures import PyBalTestCase, StubLVSService
@@ -72,10 +73,22 @@ class ServerTestCase(PyBalTestCase):
 
     def testResolveHostname(self):
         def callback(result):
-            self.assertTrue((result == True or isinstance(result, failure.Failure)))
+            self.assertIsNotNone(result)
 
         deferred = self.server.resolveHostname()
         deferred.addCallback(callback)
+        return deferred
+
+    def testResolveNonexistentHostname(self):
+        def errback(err):
+            self.assertTrue(isinstance(err, failure.Failure))
+            self.assertIsNotNone(err.check(AuthoritativeDomainError))
+            return True
+
+        nonexistentServer = pybal.server.Server(
+            'nonexistent.example.com', self.lvsservice)
+        deferred = nonexistentServer.resolveHostname()
+        deferred.addErrback(errback)
         return deferred
 
     def testDestroy(self):

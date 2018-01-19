@@ -11,6 +11,7 @@ import socket
 
 from twisted.internet import defer, reactor
 from twisted.names import client, dns
+from twisted.names.error import AuthoritativeDomainError
 from twisted.python import failure
 
 from pybal import util
@@ -89,7 +90,8 @@ class Server:
         lookups.append(client.lookupIPV6Address(self.host, timeout
             ).addCallback(self._lookupFinished, socket.AF_INET6, query))
 
-        return defer.DeferredList(lookups).addBoth(self._hostnameResolved)
+        return defer.DeferredList(lookups, consumeErrors=True
+            ).addCallback(self._allLookupsCompleted)
 
     def _lookupFinished(self, (answers, authority, additional), addressFamily, query):
         ips = set([socket.inet_ntop(addressFamily, r.payload.address)
@@ -108,7 +110,7 @@ class Server:
 
         return ips
 
-    def _hostnameResolved(self, result):
+    def _allLookupsCompleted(self, results):
         # Pick *1* main ip address to use. Prefer any existing one
         # if still available.
 
@@ -127,11 +129,12 @@ class Server:
         try:
             if not self.ip or self.ip not in ip_addresses:
                 self.ip = random.choice(list(ip_addresses))
-                # TODO: (re)pool
         except IndexError:
-            return failure.Failure() # TODO: be more specific?
+            errmsg = "Could not resolve {} to IP addresses for AF {})".format(
+                self.host, self.addressFamily)
+            raise AuthoritativeDomainError(errmsg)
         else:
-            return True
+            return self.ip
 
     def destroy(self):
         self.enabled = False
