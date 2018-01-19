@@ -183,15 +183,21 @@ class Server:
         try:
             monitorlist = eval(lvsservice.configuration['monitors'])
         except KeyError:
-            log.critical(
+            log.warn(
                 "LVS service {} does not have a 'monitors' configuration option set.".format(
                     lvsservice.name)
             )
-            raise
+            return
 
-        if type(monitorlist) != list:
+        if not isinstance(monitorlist, list):
             msg = "option 'monitors' in LVS service section {} is not a python list"
-            log.err(msg.format(lvsservice.name))
+            log.critical(msg.format(lvsservice.name))
+            # Could not parse the 'monitors' option.
+            # Instead of just logging the problem, stop PyBal
+            # as the admin might think everything is fine and all
+            # checks are green, while in fact no check is being
+            # performed.
+            reactor.stop()
         else:
             for monitorname in monitorlist:
                 try:
@@ -201,7 +207,7 @@ class Server:
                     log.err("Monitor {} does not exist".format(monitorname))
                 except Exception:
                     log.critical("Cannot import pybal.monitors.{}".format(monitorname))
-                    # An exception was raised importing the given monitor
+                    # An exception was raised importing a monitor
                     # module. Instead of just logging the problem, stop PyBal
                     # as the admin might think everything is fine and all
                     # checks are green, while in fact no check is being

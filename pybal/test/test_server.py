@@ -126,10 +126,6 @@ class ServerTestCase(PyBalTestCase):
         self.assertFalse(self.server.ready)
 
     def testCreateMonitoringInstances(self):
-        assert 'monitors' not in self.config
-        self.assertRaises(KeyError,
-            self.server.createMonitoringInstances, self.mockCoordinator)
-
         self.config['monitors'] = "[ \"NonexistentMonitor\" ]"
         self.server.createMonitoringInstances(self.mockCoordinator)
 
@@ -146,6 +142,19 @@ class ServerTestCase(PyBalTestCase):
         self.config['monitors'] = "[ \"Mock\" ]"
         self.server.createMonitoringInstances(self.mockCoordinator)
         self.assertTrue(mock_reactor.assert_called)
+
+    @mock.patch('twisted.internet.reactor.stop')
+    def testCreateMonitoringInstanceFailure(self, mock_reactor):
+        # Test missing 'monitors' option
+        assert 'monitors' not in self.config
+        self.server.removeMonitors()
+        self.server.createMonitoringInstances(self.mockCoordinator)
+        self.assertFalse(self.server.monitors)
+
+        # Test a non-list in the configuration
+        self.config['monitors'] = "(1,2)"
+        self.server.createMonitoringInstances(self.mockCoordinator)
+        mock_reactor.assert_called()
 
     def testCalcStatus(self):
         self.mockMonitor.up = True
