@@ -104,14 +104,13 @@ class ServerTestCase(PyBalTestCase):
         self.assertEqual(len(self.server.monitors), 0)
 
     def testInitialize(self):
-        def callback(result):
-            self.assertTrue(isinstance(result, bool))
+        def cb(result):
+            self.assertIsInstance(result, bool)
             self.assertEquals(self.server.ready, result)
 
-        self.server.createMonitoringInstances = mock.MagicMock()
-        deferred = self.server.initialize(self.mockCoordinator)
-        deferred.addCallback(callback)
-        return deferred
+        d = self.server.initialize(self.mockCoordinator)
+        d.addCallback(cb)
+        return d
 
     @mock.patch('pybal.server.Server.createMonitoringInstances')
     def testReady(self, mock_createMonitoringInstances):

@@ -31,8 +31,6 @@ class CoordinatorTestCase(PyBalTestCase):
         self.coordinator.lvsservice.getDepoolThreshold = mock.MagicMock(
                 return_value=0.5)
 
-        pybal.server.Server.initialize = mock.MagicMock()
-
     def tearDown(self):
         self.coordinator.configObserver.reloadTask.stop()
 
@@ -47,7 +45,8 @@ class CoordinatorTestCase(PyBalTestCase):
             server.up = True
             server.enabled = True
 
-    def test2serversCanDepool(self):
+    @mock.patch('pybal.server.Server.initialize')
+    def test2serversCanDepool(self, mock_initialize):
         servers = {
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
@@ -71,7 +70,8 @@ class CoordinatorTestCase(PyBalTestCase):
         # cannot depool.
         self.assertFalse(self.coordinator.canDepool())
 
-    def test4serversCanDepool(self):
+    @mock.patch('pybal.server.Server.initialize')
+    def test4serversCanDepool(self, mock_initialize):
         servers = {
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
