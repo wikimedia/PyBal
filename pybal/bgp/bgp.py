@@ -556,7 +556,7 @@ class FSM(object):
             self._errorClose()
         elif self.state in (ST_OPENSENT, ST_OPENCONFIRM):
             # States OpenSent, OpenConfirm, event 28
-            self.protocol.sendNotification(self.protocol, ERR_FSM, 0)
+            self.protocol.sendNotification(ERR_FSM, 0)
             self._errorClose()
             raise NotificationSent(self.protocol, ERR_FSM, 0)
 

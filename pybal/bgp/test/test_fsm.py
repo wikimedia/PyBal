@@ -806,7 +806,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @unittest.skip("Bug: updateError invokes protocol.sendNotification with wrong arguments")
     @edge(ST_OPENSENT, 28)
     def test_OpenSent_event_28(self, event=28):
         with self.eventUnderTest(NS='allow'):
@@ -949,7 +948,6 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @unittest.skip("Bug: updateError invokes protocol.sendNotification with wrong arguments")
     @edge(ST_OPENCONFIRM, 28)
     def test_OpenConfirm_event_28(self, event=28):
         with self.eventUnderTest(NS='allow'):
