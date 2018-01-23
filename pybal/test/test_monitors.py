@@ -8,27 +8,60 @@
 """
 
 import pybal.util
+import pybal.monitor
 from pybal.monitors.idleconnection import IdleConnectionMonitoringProtocol
 from pybal.monitors.dnsquery import DNSQueryMonitoringProtocol
 from pybal.monitors.runcommand import RunCommandMonitoringProtocol
 from pybal.monitors.udp import UDPMonitoringProtocol
 
-from twisted.internet import defer
-from twisted.internet.reactor import getDelayedCalls
+from twisted.internet import defer, reactor
 from twisted.names.common import ResolverBase
 from twisted.names import dns, error
+import twisted.test.proto_helpers
+
+import unittest
 
 from .fixtures import PyBalTestCase
 
 
-class IdleConnectionMonitoringProtocolTestCase(PyBalTestCase):
+class BaseMonitoringProtocolTestCase(PyBalTestCase):
+    """Base test case for pybal monitors"""
+
+    monitorClass = pybal.monitor.MonitoringProtocol
+
+    def setUp(self):
+        super(BaseMonitoringProtocolTestCase, self).setUp()
+        self.monitor = self.monitorClass(
+            self.coordinator, self.server, self.config)
+        self.monitor.reactor = reactor
+
+    def tearDown(self):
+        if self.monitor.active:
+            self.monitor.stop()
+
+    def testRun(self):
+        self.monitor.run()
+        self.assertTrue(self.monitor.active)
+
+    def testRunAlreadyActive(self):
+        self.monitor.run()
+        with self.assertRaises(AssertionError):
+            self.monitor.run()
+        self.assertTrue(self.monitor.active)
+
+    def testStop(self):
+        self.monitor.run()
+        self.monitor.stop()
+        self.assertFalse(self.monitor.active)
+
+
+class IdleConnectionMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.IdleConnectionMonitoringProtocol`."""
+
+    monitorClass = IdleConnectionMonitoringProtocol
 
     def setUp(self):
         super(IdleConnectionMonitoringProtocolTestCase, self).setUp()
-        self.config = pybal.util.ConfigDict()
-        self.monitor = IdleConnectionMonitoringProtocol(
-            self.coordinator, self.server, self.config)
         self.monitor.reactor = self.reactor
 
     def testInit(self):
@@ -110,20 +143,20 @@ class FakeResolverUnknownError(ResolverBase):
         return defer.fail(error.DNSUnknownError([]))
 
 
-class DNSQueryMonitoringProtocolTestCase(PyBalTestCase):
+class DNSQueryMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.DNSQueryMonitoringProtocol`."""
 
+    monitorClass = DNSQueryMonitoringProtocol
+
     def setUp(self):
-        super(DNSQueryMonitoringProtocolTestCase, self).setUp()
-        self.config = pybal.util.ConfigDict()
         self.config['dnsquery.hostnames'] = '["en.wikipedia.org"]'
-        self.monitor = DNSQueryMonitoringProtocol(
-            self.coordinator, self.server, self.config)
+        super(DNSQueryMonitoringProtocolTestCase, self).setUp()
 
     def tearDown(self):
+        super(DNSQueryMonitoringProtocolTestCase, self).tearDown()
         # There doesn't seem to be any sane way to avoid the delayed call to
         # maybeParseConfig: https://twistedmatrix.com/trac/ticket/3745
-        for call in getDelayedCalls():
+        for call in reactor.getDelayedCalls():
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
 
@@ -141,7 +174,6 @@ class DNSQueryMonitoringProtocolTestCase(PyBalTestCase):
         self.assertIsNone(self.monitor.resolver)
         self.monitor.run()
         self.assert_(len(self.monitor.resolver.resolvers) > 0)
-        self.monitor.stop()
 
     def __testQuery(self, expectSuccess, fakeResolver):
         """Install a mocked resolver to test different lookup results"""
@@ -192,46 +224,44 @@ class DNSQueryMonitoringProtocolTestCase(PyBalTestCase):
                          fakeResolver=FakeResolverUnknownError)
 
 
-class RunCommandMonitoringProtocolTestCase(PyBalTestCase):
+class RunCommandMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.RunCommandMonitoringProtocol`."""
 
+    monitorClass = RunCommandMonitoringProtocol
+
     def setUp(self):
-        super(RunCommandMonitoringProtocolTestCase, self).setUp()
-        self.config = pybal.util.ConfigDict()
         self.config['runcommand.command'] = '/bin/true'
+        super(RunCommandMonitoringProtocolTestCase, self).setUp()
 
     def testInit(self):
         self.config['runcommand.arguments'] = '[ "--help" ]'
-        self.monitor = RunCommandMonitoringProtocol(
+        monitor = RunCommandMonitoringProtocol(
             self.coordinator, self.server, self.config)
 
-        self.assertEquals(self.monitor.intvCheck,
+        self.assertEquals(monitor.intvCheck,
                           RunCommandMonitoringProtocol.INTV_CHECK)
-        self.assertEquals(self.monitor.timeout,
+        self.assertEquals(monitor.timeout,
                           RunCommandMonitoringProtocol.TIMEOUT_RUN)
-        self.assertEquals(self.monitor.arguments, ["--help",])
+        self.assertEquals(monitor.arguments, ["--help",])
 
     def testInitNoArguments(self):
-        self.monitor = RunCommandMonitoringProtocol(
+        monitor = RunCommandMonitoringProtocol(
             self.coordinator, self.server, self.config)
-        self.assertEquals(self.monitor.arguments, [""])
+        self.assertEquals(monitor.arguments, [""])
 
     def testInitArgumentsNotStringList(self):
         self.config['runcommand.arguments'] = "[]"
-        self.monitor = RunCommandMonitoringProtocol(
+        monitor = RunCommandMonitoringProtocol(
             self.coordinator, self.server, self.config)
-        self.assertEquals(self.monitor.arguments, [""])
+        self.assertEquals(monitor.arguments, [""])
 
 
-class UDPMonitoringProtocolTestCase(PyBalTestCase):
+class UDPMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
+    monitorClass = UDPMonitoringProtocol
+
     def setUp(self):
         super(UDPMonitoringProtocolTestCase, self).setUp()
-        self.config = pybal.util.ConfigDict()
-        self.monitor = UDPMonitoringProtocol(
-            self.coordinator, self.server, self.config)
-
-    def tearDown(self):
-        self.monitor.stop()
+        self.monitor.reactor = twisted.internet.reactor
 
     def testInit(self):
         self.assertEquals(self.monitor.interval,

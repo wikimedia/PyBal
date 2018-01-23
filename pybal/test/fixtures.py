@@ -117,9 +117,12 @@ class PyBalTestCase(twisted.trial.unittest.TestCase):
     scheduler = 'rr'
     protocol = 'tcp'
 
+    def __init__(self, *args, **kwargs):
+        super(PyBalTestCase, self).__init__(*args, **kwargs)
+        self.config = pybal.util.ConfigDict()
+
     def setUp(self):
         self.coordinator = StubCoordinator()
-        self.config = pybal.util.ConfigDict()
         service_def = (self.protocol, self.ip, self.port, self.scheduler)
         self.lvsservice = StubLVSService(self.name, service_def, self.config)
         self.server = ServerStub(self.host, self.ip, self.port,
