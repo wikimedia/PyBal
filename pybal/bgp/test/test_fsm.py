@@ -690,7 +690,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
     def test_OpenSent_event_9_13(self, event):
         self._testFSM_error(eventMethods[event])
 
-    @unittest.skip("holdTimeEvent increases connectRetryCounter twice")
     @edge(ST_OPENSENT, 10)
     def test_OpenSent_event_10(self, event=10):
         with self.eventUnderTest():
@@ -841,7 +840,6 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
     def test_OpenConfirm_event_9_13(self, event):
         self._testFSM_error(eventMethods[event])
 
-    @unittest.skip("holdTimeEvent increases connectRetryCounter twice")
     @edge(ST_OPENCONFIRM, 10)
     def test_OpenConfirm_event_10(self, event=10):
         with self.eventUnderTest():
@@ -983,7 +981,6 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
     def test_Established_event_9_13(self, event):
         self._testFSM_error(eventMethods[event])
 
-    @unittest.skip("holdTimeEvent increases connectRetryCounter twice")
     @edge(ST_ESTABLISHED, 10)
     def test_Established_event_10(self, event=10):
         with self.eventUnderTest():

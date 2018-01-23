@@ -620,13 +620,8 @@ class FSM(object):
         if self.state in (ST_OPENSENT, ST_OPENCONFIRM, ST_ESTABLISHED):
             # States OpenSent, OpenConfirm, Established, event 10
             self.protocol.sendNotification(ERR_HOLD_TIMER_EXPIRED, 0)
-            self.connectRetryTimer.cancel()
             self._errorClose()
-            self.connectRetryCounter += 1
             # TODO: peer osc damping
-            self.state = ST_IDLE
-
-            #self.protocol.deferred.errback(HoldTimerExpired(self.protocol))
         elif self.state in (ST_CONNECT, ST_ACTIVE):
             self._errorClose()
 
