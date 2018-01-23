@@ -353,13 +353,6 @@ class FSM(object):
         established with the peer. (events 16, 17)
         """
 
-        self.metric_labels['local_ip'] = self.protocol.transport.getHost().host
-        self.metric_labels['remote_ip'] = self.protocol.transport.getPeer().host
-        if self.protocol.transport.getPeer().port == PORT:
-            self.metric_labels['side'] = 'active'
-        else:
-            self.metric_labels['side'] = 'passive'
-
         if self.state in (ST_CONNECT, ST_ACTIVE):
             # State Connect, Event 16 or 17
             if self.delayOpen:
@@ -895,6 +888,14 @@ class BGP(protocol.Protocol):
         # Set the local BGP id from the local IP address if it's not set
         if self.factory.bgpId is None:
             self.factory.bgpId = IPv4IP(self.transport.getHost().host).ipToInt()  # FIXME: IPv6
+
+        # Update FSM metric labels with this connection's info
+        self.fsm.metric_labels['local_ip'] = self.transport.getHost().host
+        self.fsm.metric_labels['remote_ip'] = self.transport.getPeer().host
+        if self.transport.getPeer().port == PORT:
+            self.fsm.metric_labels['side'] = 'active'
+        else:
+            self.fsm.metric_labels['side'] = 'passive'
 
         try:
             self.fsm.connectionMade()

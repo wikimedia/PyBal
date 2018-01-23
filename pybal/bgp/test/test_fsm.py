@@ -248,7 +248,6 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
             self.fsm.idleHoldTimeEvent()
         self.fsm.bgpPeering.automaticStart.assert_called_with(idleHold=False)
 
-    @unittest.skip("Bug: connectionMade shouldn't do anything in ST_IDLE")
     @edge(ST_IDLE, 17)
     def test_Idle_event_17(self, event=17):
         self._testIgnoreEvent(eventMethods[event])
