@@ -6,14 +6,18 @@
 
 """
 
-from .. import ip, bgp, attributes
+# Twisted imports
+from twisted.internet import task
+
+# BGP imports
+from .. import bgp, fsm
 from ..exceptions import NotificationSent
 from ..constants import ST_IDLE, ST_CONNECT, ST_ACTIVE, ST_OPENSENT, ST_OPENCONFIRM, ST_ESTABLISHED
 
 import unittest, mock
 from contextlib import contextmanager
 
-eventMethods = bgp.FSM.eventMethods
+eventMethods = fsm.FSM.eventMethods
 
 
 def edge(state, *events):
@@ -66,15 +70,15 @@ def replicate_tests(aClass):
 
 class FSMDefinitionTestCase(unittest.TestCase):
     """
-    Tests bgp.FSM according to the FSM definition in RFC 4271
+    Tests fsm.FSM according to the FSM definition in RFC 4271
 
     This code explicitly does not try to avoid duplication by refactoring much,
     but instead tries to follow the RFC as closely as possible - as factoring
-    out common code (like the bgp.FSM code does) can introduce bugs.
+    out common code (like the fsm.FSM code does) can introduce bugs.
     """
 
     def setUp(self):
-        self.fsm = bgp.FSM(
+        self.fsm = fsm.FSM(
             bgpPeering=mock.Mock(spec=bgp.BGPPeering),
             protocol=mock.Mock(spec=bgp.BGP)
         )
@@ -88,7 +92,7 @@ class FSMDefinitionTestCase(unittest.TestCase):
 
     def _mockTimer(self, timername):
         mockedTimer = mock.Mock(
-            spec=bgp.FSM.BGPTimer,
+            spec=fsm.FSM.BGPTimer,
             name=timername,
             timertime=None)
 
@@ -173,7 +177,7 @@ class FSMDefinitionTestCase(unittest.TestCase):
     @contextmanager
     def eventUnderTest(self, NS=None, *args, **kwargs):
         """
-        A context manager for unit testing bgp.FSM event methods
+        A context manager for unit testing fsm.FSM event methods
 
         Params:
         - NS:   'assert' asserts that NotificationSent is raised.
@@ -1120,8 +1124,37 @@ class FSMTestCompletenessTestCase(unittest.TestCase):
     def testCompleteness(self):
         missingTests = []
         for state in bgp.stateDescr.iterkeys():
-            for event in bgp.FSM.eventMethods.iterkeys():
+            for event in fsm.FSM.eventMethods.iterkeys():
                 if not (state, event) in edge.edges:
                     missingTests.append("State {} event {} is not tested!".format(
                         bgp.stateDescr[state], event))
         self.assertFalse(missingTests, msg="\n".join(missingTests))
+
+
+class BGPTimerTestCase(unittest.TestCase):
+    def setUp(self):
+        self.reactor_patcher = mock.patch('pybal.bgp.fsm.reactor', new_callable=task.Clock)
+        self.reactor = self.reactor_patcher.start()
+
+    def tearDown(self):
+        self.reactor_patcher.stop()
+
+    def testTriggeredTimer(self):
+        called_function = mock.MagicMock()
+        timer = fsm.FSM.BGPTimer(called_function)
+        self.assertFalse(timer.active())
+        timer.reset(fsm.FSM.largeHoldTime)
+        self.assertTrue(timer.active())
+        self.reactor.advance(fsm.FSM.largeHoldTime)
+        called_function.assert_called_once()
+
+    def testCancelledTimer(self):
+        called_function = mock.MagicMock()
+        timer = fsm.FSM.BGPTimer(called_function)
+        timer.reset(fsm.FSM.largeHoldTime)
+        self.reactor.advance(fsm.FSM.largeHoldTime-1)
+        self.assertTrue(timer.active())
+        timer.cancel()
+        self.assertFalse(timer.active())
+        self.reactor.advance(2)
+        called_function.assert_not_called()

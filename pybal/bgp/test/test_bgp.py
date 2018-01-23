@@ -7,13 +7,12 @@
 
 """
 
-from .. import ip, bgp, exceptions, attributes
+from .. import ip, bgp, fsm, exceptions, attributes
 
 import unittest, mock, struct
 
 from twisted.test import proto_helpers
 from twisted.python.failure import Failure
-from twisted.internet import task
 from twisted.internet.error import ConnectionLost
 from twisted.internet.address import IPv4Address, IPv6Address
 
@@ -411,49 +410,16 @@ class BGPNonSupportedMsgParserTestCase(unittest.TestCase):
         self.bgp.fsm.headerError.assert_called_with(bgp.ERR_MSG_HDR_BAD_MSG_TYPE, chr(5))
 
 
-class BGPTimerTestCase(unittest.TestCase):
-    def setUp(self):
-        self.reactor_patcher = mock.patch('pybal.bgp.bgp.reactor', new_callable=task.Clock)
-        self.reactor = self.reactor_patcher.start()
-
-    def tearDown(self):
-        self.reactor_patcher.stop()
-
-    def testTriggeredTimer(self):
-        called_function = mock.MagicMock()
-        timer = bgp.FSM.BGPTimer(called_function)
-        self.assertFalse(timer.active())
-        timer.reset(bgp.FSM.largeHoldTime)
-        self.assertTrue(timer.active())
-        self.reactor.advance(bgp.FSM.largeHoldTime)
-        called_function.assert_called_once()
-
-    def testCancelledTimer(self):
-        called_function = mock.MagicMock()
-        timer = bgp.FSM.BGPTimer(called_function)
-        timer.reset(bgp.FSM.largeHoldTime)
-        self.reactor.advance(bgp.FSM.largeHoldTime-1)
-        self.assertTrue(timer.active())
-        timer.cancel()
-        self.assertFalse(timer.active())
-        self.reactor.advance(2)
-        called_function.assert_not_called()
-
 class BGPUniqueLoggingTestCase(unittest.TestCase):
     def testLogImplementations(self):
-        classes = ['BGP', 'FSM', 'BGPFactory']
-        for c in classes:
-            logger_patch = mock.patch('pybal.bgp.bgp._log')
-            logger = logger_patch.start()
+        classes = [('bgp', bgp.BGP), ('bgp', bgp.BGPFactory), ('fsm', fsm.FSM)]
+        for m, c in classes:
+            with mock.patch('pybal.bgp.{}._log'.format(m)) as logger:
+                instanceA = c()
+                instanceB = c()
 
-            class_ = getattr(bgp, c)
-            instanceA = class_()
-            instanceB = class_()
+                instanceA.log("MSG")
+                instanceB.log("MSG")
 
-            instanceA.log("MSG")
-            instanceB.log("MSG")
-
-            self.assertNotEquals(logger.mock_calls[-1],
-                                 logger.mock_calls[-2])
-
-            logger_patch.stop()
+                self.assertNotEqual(logger.mock_calls[-1],
+                                    logger.mock_calls[-2])
