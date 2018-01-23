@@ -8,7 +8,7 @@
 
 from .. import ip, bgp, attributes
 from ..exceptions import NotificationSent
-from ..bgp import ST_IDLE, ST_CONNECT, ST_ACTIVE, ST_OPENSENT, ST_OPENCONFIRM, ST_ESTABLISHED
+from ..constants import ST_IDLE, ST_CONNECT, ST_ACTIVE, ST_OPENSENT, ST_OPENCONFIRM, ST_ESTABLISHED
 
 import unittest, mock
 from contextlib import contextmanager
