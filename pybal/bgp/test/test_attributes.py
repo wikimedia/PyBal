@@ -341,8 +341,6 @@ class MPReachNLRIAttributeTestCase(AttributeTestCase):
         self._testFlags()
         self._testValue()
 
-    # FIXME
-    @unittest.skip("Bug in MPReachNLRIAttribute.initFromTuple: IPv4IP doesn't accept packed= argument ")
     def testConstructorFromTupleAFI_INET(self):
         # AFI_INET test case
         encValue = self._encodeValue((bgp.AFI_INET,
@@ -350,6 +348,7 @@ class MPReachNLRIAttributeTestCase(AttributeTestCase):
             ip.IPv4IP(b"127.0.0.1"),
             []))
         attr = self.DUT(attrTuple=(self.flags, self.typeCode, encValue))
+        self.assertEquals(attr.value[2], ip.IPv4IP(b"127.0.0.1"))
 
     def testConstructorFromInvalidTuple(self):
         super(MPReachNLRIAttributeTestCase, self).testConstructorFromInvalidTuple()

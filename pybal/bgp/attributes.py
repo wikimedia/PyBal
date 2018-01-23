@@ -486,7 +486,12 @@ class MPReachNLRIAttribute(BaseMPAttribute):
             raise AttributeException(bgp.ERR_MSG_UPDATE_OPTIONAL_ATTR, attrTuple)
 
         if self.afi == bgp.AFI_INET:
-            nexthop = IPv4IP(packed=pnh)
+            try:
+                ip = struct.unpack('!I', pnh)[0]
+            except struct.error:
+                raise AttributeException(bgp.ERR_MSG_UPDATE_OPTIONAL_ATTR, attrTuple)
+            else:
+                nexthop = IPv4IP(ip)
         elif self.afi == bgp.AFI_INET6:
             nexthop = IPv6IP(packed=pnh)
 
