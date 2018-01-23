@@ -1073,7 +1073,6 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
         self.fsm.protocol.sendNotification.assert_called_with(bgp.ERR_CEASE, 0)
         self._subtest_Established_to_Idle()
 
-    @unittest.skip("Bug: versionError does not increase connectRetryCounter")
     @edge(ST_ESTABLISHED, 24)
     def test_Established_event_24(self, event=24):
         with self.eventUnderTest():

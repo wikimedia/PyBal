@@ -514,13 +514,13 @@ class FSM(object):
         """
 
         if self.state in (ST_OPENSENT, ST_OPENCONFIRM):
-            # State OpenSent, event 24
+            # State OpenSent/OpenConfirm, event 24
             self.connectRetryTimer.cancel()
             if self.bgpPeering: self.bgpPeering.releaseResources(self.protocol)
             self._closeConnection()
             self.state = ST_IDLE
-        elif self.state in (ST_CONNECT, ST_ACTIVE):
-            # State Connect, event 24
+        elif self.state in (ST_CONNECT, ST_ACTIVE, ST_ESTABLISHED):
+            # State Connect/Active/Established, event 24
             self._errorClose()
 
     def notificationReceived(self, error, suberror):
