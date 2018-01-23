@@ -846,7 +846,7 @@ class FSM(object):
     largeHoldTime = 4*60
     sendNotificationWithoutOpen = True    # No bullshit
 
-    metric_labelnames = {'asn', 'state', 'local_ip', 'remote_ip', 'side'}
+    metric_labelnames = {'local_asn', 'state', 'local_ip', 'remote_ip', 'side'}
     metric_keywords = {
         'labelnames': metric_labelnames,
         'namespace': 'pybal',
