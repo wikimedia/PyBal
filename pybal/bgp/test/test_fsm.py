@@ -703,7 +703,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @unittest.skip("Bug: keepAliveEvent doesn't handle OpenSent")
     @edge(ST_OPENSENT, 11)
     def test_OpenSent_event_11(self, event=11):
         self._testFSM_error(eventMethods[event])

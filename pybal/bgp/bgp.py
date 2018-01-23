@@ -625,6 +625,10 @@ class FSM(object):
                 self.keepAliveTimer.reset(self.keepAliveTime)
         elif self.state in (ST_CONNECT, ST_ACTIVE):
             self._errorClose()
+        elif self.state == ST_OPENSENT:
+            self.protocol.sendNotification(ERR_FSM, 0)
+            self._errorClose()
+            raise NotificationSent(self.protocol, ERR_FSM, 0)
 
     def holdTimeEvent(self):
         """Called when the HoldTimer expires. (event 10)"""
