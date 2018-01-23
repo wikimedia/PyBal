@@ -2275,7 +2275,7 @@ class BGPPeering(BGPFactory):
         BGPPeering or FSM, otherwise use manualStart() instead.
         """
 
-        self.report("(Re)connect to %s" % self.peerAddr, logging.INFO)
+        self.log("(Re)connect to %s" % self.peerAddr, logging.INFO)
 
         if self.fsm.state != ST_ESTABLISHED:
             reactor.connectTCP(self.peerAddr, PORT, self)
