@@ -134,7 +134,7 @@ class FSMDefinitionTestCase(unittest.TestCase):
         Asserts that a connection has been dropped and all associated
         BGP resources have been released.
         """
-        self._testDropConnection()
+        self.assertConnectionDropped()
         self.fsm.bgpPeering.releaseResources.assert_called()
 
     def _testIgnoreEvent(self, eventMethod, *args, **kwargs):
@@ -147,7 +147,7 @@ class FSMDefinitionTestCase(unittest.TestCase):
         for timer in self.fsm.bgpTimers:
             getattr(self.fsm, timer).assert_not_called()
 
-    def _testDropConnection(self):
+    def assertConnectionDropped(self):
         """Tests whether the BGP TCP connection has been dropped"""
         self.fsm.protocol.closeConnection.assert_called()
         self.fsm.bgpPeering.connectionClosed.assert_called()
@@ -232,8 +232,8 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
         self.assertTimerReset(self.fsm.connectRetryTimer, self.fsm.connectRetryTime)
         self.assertTrue(connect)
 
-    @edge(ST_IDLE, 2, 9, 10, 11, 18, 19, 20, 23, 24, 26)
-    def test_Idle_Noops_event_2_9_10_11_18_19_20_23_24_26(self, event):
+    @edge(ST_IDLE, 2, 9, 10, 11, 17, 18, 19, 20, 23, 24, 26)
+    def test_Idle_Noops_event_2_9_10_11_17_18_19_20_23_24_26(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_IDLE, 12)
@@ -247,10 +247,6 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
         with self.eventUnderTest():
             self.fsm.idleHoldTimeEvent()
         self.fsm.bgpPeering.automaticStart.assert_called_with(idleHold=False)
-
-    @edge(ST_IDLE, 17)
-    def test_Idle_event_17(self, event=17):
-        self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_IDLE, 21, 22, 27, 28)
     def test_Idle_event_21_22_27_28(self, event):
@@ -290,16 +286,16 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
     def test_Connect_event_9(self, event=9):
         with self.eventUnderTest():
             self.fsm.connectRetryTimeEvent()
-        self._testDropConnection()
+        self.assertConnectionDropped()
         self.assertTimerReset(self.fsm.connectRetryTimer, self.fsm.connectRetryTime)
         self.assertTimerInactive(self.fsm.delayOpenTimer)
         # TODO: check BGPPeering.connectRetryEvent
         self.fsm.bgpPeering.connectRetryEvent.assert_called()
         self.assertState(ST_CONNECT)
 
-    @edge(ST_CONNECT, 10, 11, 13)
-    def test_Connect_event_10_11_13(self, event):
-        self._test_Connect_to_IDLE(eventMethods[event])
+    @edge(ST_CONNECT, 10, 11, 13, 23, 26)
+    def test_Connect_event_10_11_13_23_26(self, event):
+        self._subtest_Connect_to_Idle(eventMethods[event])
 
     @edge(ST_CONNECT, 12)
     def test_Connect_event_12(self, event=12):
@@ -347,13 +343,13 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         with self.eventUnderTest():
             self.fsm.connectionFailed()
         self.assertTimerInactive(self.fsm.connectRetryTimer)
-        self._testDropConnection()
+        self.assertConnectionDropped()
         self.assertState(ST_IDLE)
 
     @edge(ST_CONNECT, 19)
     def test_Connect_event_19(self, event=19):
         self.assertFalse(self.fsm.delayOpen)
-        self._test_Connect_to_IDLE(eventMethods[event])
+        self._subtest_Connect_to_Idle(eventMethods[event])
 
     def _subtest_Connect_event_20(self):
         self.fsm.delayOpen = True
@@ -402,10 +398,6 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @edge(ST_CONNECT, 23)
-    def test_Connect_event_23(self, event=23):
-        self._test_Connect_to_IDLE(eventMethods[event])
-
     @edge(ST_CONNECT, 24)
     def test_Connect_event_24_DelayOpenTimer_running(self, event=24):
         self.fsm.delayOpenTimer.reset(self.fsm.delayOpenTime)
@@ -426,19 +418,6 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self.assertReleasedAndDropped()
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
-
-    def _test_Connect_to_IDLE(self, eventMethod):
-        with self.eventUnderTest(NS='allow'):
-            getattr(self.fsm, eventMethod)()
-        self.assertTimerInactive(self.fsm.connectRetryTimer)
-        self.assertTimerInactive(self.fsm.delayOpenTimer)
-        self.assertReleasedAndDropped()
-        self.assertCRCIncremented()
-        self.assertState(ST_IDLE)
-
-    @edge(ST_CONNECT, 26)
-    def test_Connect_event_26(self, event=26):
-        self._test_Connect_to_IDLE(eventMethods[event])
 
     @edge(ST_CONNECT, 27)
     def test_Connect_event_27(self, event=27):
@@ -469,11 +448,12 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self._setState(ST_ACTIVE)
 
     def _subtest_Active_to_Idle(self, eventMethod):
-        with self.eventUnderTest(NS='allow', event=eventMethod):
+        with self.eventUnderTest(NS='allow'):
             getattr(self.fsm, eventMethod)()
         self.assertTimerInactive(self.fsm.connectRetryTimer)
         self.fsm.delayOpenTimer.assert_not_called()
         self.assertReleasedAndDropped()
+        self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
     @edge(ST_ACTIVE, 1, 3)
@@ -499,9 +479,9 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.fsm.bgpPeering.connectRetryEvent.assert_called()
         self.assertState(ST_CONNECT)
 
-    @edge(ST_ACTIVE, 10, 11, 13)
-    def test_Active_event_10_11_13(self, event):
-        self._test_Active_to_IDLE(eventMethods[event])
+    @edge(ST_ACTIVE, 10, 11, 13, 23, 26)
+    def test_Active_event_10_11_13_23_26(self, event):
+        self._subtest_Active_to_Idle(eventMethods[event])
 
     @edge(ST_ACTIVE, 12)
     def test_Active_event_12(self, event=12):
@@ -548,7 +528,7 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
     @edge(ST_ACTIVE, 19)
     def test_Active_event_19(self, event=19):
         self.assertFalse(self.fsm.delayOpen)
-        self._test_Active_to_IDLE(eventMethods[event])
+        self._subtest_Active_to_Idle(eventMethods[event])
 
     def _subtest_Active_event_20(self):
         self.fsm.delayOpen = True
@@ -597,10 +577,6 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @edge(ST_ACTIVE, 23)
-    def test_Active_event_23(self, event=23):
-        self._test_Active_to_IDLE(eventMethods[event])
-
     @edge(ST_ACTIVE, 24)
     def test_Active_event_24_DelayOpenTimer_running(self, event=24):
         self.fsm.delayOpenTimer.reset(self.fsm.delayOpenTime)
@@ -621,19 +597,6 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.assertReleasedAndDropped()
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
-
-    def _test_Active_to_IDLE(self, eventMethod):
-        with self.eventUnderTest(NS='allow'):
-            getattr(self.fsm, eventMethod)()
-        self.assertTimerInactive(self.fsm.connectRetryTimer)
-        self.fsm.delayOpenTimer.assert_not_called()
-        self.assertReleasedAndDropped()
-        self.assertCRCIncremented()
-        self.assertState(ST_IDLE)
-
-    @edge(ST_ACTIVE, 26)
-    def test_Active_event_26(self, event=26):
-        self._test_Active_to_IDLE(eventMethods[event])
 
     @edge(ST_ACTIVE, 27)
     def test_Active_event_27(self, event=27):
@@ -678,8 +641,8 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertEqual(self.fsm.connectRetryCounter, 0)
         self.assertState(ST_IDLE)
 
-    @edge(ST_OPENSENT, 9, 13)
-    def test_OpenSent_event_9_13(self, event):
+    @edge(ST_OPENSENT, 9, 11, 13, 26)
+    def test_OpenSent_event_9_11_13_26(self, event):
         self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENSENT, 10)
@@ -691,10 +654,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertReleasedAndDropped()
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
-
-    @edge(ST_OPENSENT, 11)
-    def test_OpenSent_event_11(self, event=11):
-        self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENSENT, 12)
     def test_OpenSent_event_12(self, event=12):
@@ -709,7 +668,7 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
     def test_OpenSent_event_18(self, event=18):
         with self.eventUnderTest():
             self.fsm.connectionFailed()
-        self._testDropConnection()
+        self.assertConnectionDropped()
         self.assertTimerReset(self.fsm.connectRetryTimer, self.fsm.connectRetryTime)
         self.assertState(ST_ACTIVE)
 
@@ -780,10 +739,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertTimerInactive(self.fsm.connectRetryTimer)
         self.assertReleasedAndDropped()
         self.assertState(ST_IDLE)
-
-    @edge(ST_OPENSENT, 26)
-    def test_OpenSent_event_26(self, event=26):
-        self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENSENT, 27)
     def test_OpenSent_event_27(self, event=27):
@@ -956,6 +911,12 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
         self._setState(ST_ESTABLISHED)
         self.sampleUpdate = 'test'
 
+    def _subtest_Established_to_Idle(self):
+        self.assertTimerInactive(self.fsm.connectRetryTimer)
+        self.assertReleasedAndDropped()
+        self.assertCRCIncremented()
+        self.assertState(ST_IDLE)
+
     @edge(ST_ESTABLISHED, 1, 3)
     def test_Established_Noops_event_1_3(self, event):
         self._testIgnoreEvent(eventMethods[event])
@@ -1006,12 +967,6 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
     def test_Established_event_12(self, event=12):
         self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
-
-    def _subtest_Established_to_Idle(self):
-        self.assertTimerInactive(self.fsm.connectRetryTimer)
-        self.assertReleasedAndDropped()
-        self.assertCRCIncremented()
-        self.assertState(ST_IDLE)
 
     @edge(ST_ESTABLISHED, 17)
     def test_Established_event_17(self, event=17):
