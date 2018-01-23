@@ -66,7 +66,7 @@ class StubLVSService(object):
     def __init__(self, name, (protocol, ip, port, scheduler), configuration):
         self.name = name
 
-        self.servers = {}
+        self.servers = set()
         self.protocol = protocol
         self.ip = ip
         self.port = port

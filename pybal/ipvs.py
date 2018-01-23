@@ -219,8 +219,9 @@ class LVSService:
         self.ipvsManager.modifyState(cmdList)
 
     def assignServers(self, newServers):
-        """Takes a (new) set of servers (as a host->Server dictionary)
-        and updates the LVS state accordingly."""
+        """
+        Takes a (new) set of servers and updates the LVS state accordingly.
+        """
 
         cmdList = (
             [self.ipvsManager.commandAddServer(self.service(), server)
