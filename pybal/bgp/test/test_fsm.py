@@ -792,7 +792,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertReleasedAndDropped()
         self.assertState(ST_IDLE)
 
-    @unittest.skip("Bug: event 26 does not handle state OpenSent")
     @edge(ST_OPENSENT, 26)
     def test_OpenSent_event_26(self, event=26):
         self._testFSM_error(eventMethods[event])

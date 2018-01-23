@@ -506,6 +506,11 @@ class FSM(object):
         elif self.state in (ST_CONNECT, ST_ACTIVE):
             # States Connect, Active, event 26
             self._errorClose()
+        elif self.state == ST_OPENSENT:
+            # State OpenSent, event 26
+            self.protocol.sendNotification(ERR_FSM, 0)
+            self._errorClose()
+            raise NotificationSent(self.protocol, ERR_FSM, 0)
 
     def versionError(self):
         """
