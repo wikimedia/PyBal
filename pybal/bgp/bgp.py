@@ -431,21 +431,33 @@ class FSM(object):
                 self._errorClose()
 
         elif self.state == ST_OPENSENT:
-            # State OpenSent, events 19, 20
-            self.delayOpenTimer.cancel()
-            self.connectRetryTimer.cancel()
-            self.protocol.sendKeepAlive()
-            if self.holdTime > 0:
-                self.keepAliveTimer.reset(self.keepAliveTime)
-                self.holdTimer.reset(self.holdTime)
-            self.state = ST_OPENCONFIRM
+            if not self.delayOpen:
+                # State OpenSent, event 19
+                self.delayOpenTimer.cancel()
+                self.connectRetryTimer.cancel()
+                self.protocol.sendKeepAlive()
+                if self.holdTime > 0:
+                    self.keepAliveTimer.reset(self.keepAliveTime)
+                    self.holdTimer.reset(self.holdTime)
+                self.state = ST_OPENCONFIRM
+            else:
+                # State OpenSent, event 20
+                self.protocol.sendNotification(ERR_FSM, 0)
+                self._errorClose()
+                raise NotificationSent(self.protocol, ERR_FSM, 0)
 
         elif self.state == ST_OPENCONFIRM:
-            # State OpenConfirm, events 19, 20
-            self.log("Running collision detection")
+            if not self.delayOpen:
+                # State OpenConfirm, events 19
+                self.log("Running collision detection")
 
-            # Perform collision detection
-            self.protocol.collisionDetect()
+                # Perform collision detection
+                self.protocol.collisionDetect()
+            else:
+                # State OpenConfirm, event 20
+                self.protocol.sendNotification(ERR_FSM, 0)
+                self._errorClose()
+                raise NotificationSent(self.protocol, ERR_FSM, 0)
 
         elif self.state == ST_ESTABLISHED:
             # State Established, event 19 or 20

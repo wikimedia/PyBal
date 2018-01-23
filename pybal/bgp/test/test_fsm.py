@@ -359,12 +359,13 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self._testDropConnection()
         self.assertState(ST_IDLE)
 
-    @unittest.skip("Bug: event 19")
     @edge(ST_CONNECT, 19)
     def test_Connect_event_19(self, event=19):
-        self._testConnect_to_IDLE(eventMethods[event])
+        self.assertFalse(self.fsm.delayOpen)
+        self._test_Connect_to_IDLE(eventMethods[event])
 
     def _subtest_Connect_event_20(self):
+        self.fsm.delayOpen = True
         # DelayOpenTimer needs to be running
         self.fsm.delayOpenTimer.reset(1)
         with self.eventUnderTest():
@@ -557,9 +558,11 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
 
     @edge(ST_ACTIVE, 19)
     def test_Active_event_19(self, event=19):
+        self.assertFalse(self.fsm.delayOpen)
         self._test_Active_to_IDLE(eventMethods[event])
 
     def _subtest_Active_event_20(self):
+        self.fsm.delayOpen = True
         # DelayOpenTimer needs to be running
         self.fsm.delayOpenTimer.reset(1)
         with self.eventUnderTest():
@@ -725,6 +728,7 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
     @edge(ST_OPENSENT, 19)
     def test_OpenSent_event_19_HoldTime_zero(self, event=19):
         self.fsm.holdTime = 0   # Set negotiated holdTime to 0
+        self.assertFalse(self.fsm.delayOpen)
         with self.eventUnderTest():
             self.fsm.openReceived()
         self.assertTimerInactive(self.fsm.delayOpenTimer)
@@ -737,6 +741,7 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
     @edge(ST_OPENSENT, 19)
     def test_OpenSent_event_19_HoldTime_nonzero(self, event=19):
         self.fsm.holdTime = self.fsm.largeHoldTime   # Set negotiated holdTime > 0
+        self.assertFalse(self.fsm.delayOpen)
         with self.eventUnderTest():
             self.fsm.openReceived()
         self.assertTimerInactive(self.fsm.delayOpenTimer)
@@ -746,9 +751,9 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertTimerReset(self.fsm.keepAliveTimer, self.fsm.keepAliveTime)
         self.assertState(ST_OPENCONFIRM)
 
-    @unittest.skip("Bug: event 20 does not increase connectRetryCounter")
     @edge(ST_OPENSENT, 20)
     def test_OpenSent_event_20(self, event=20):
+        self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENSENT, 21)
@@ -879,13 +884,14 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
 
     @edge(ST_OPENCONFIRM, 19)
     def test_OpenConfirm_event_19(self, event=19):
+        self.assertFalse(self.fsm.delayOpen)
         with self.eventUnderTest():
             self.fsm.openReceived()
         self.fsm.protocol.collisionDetect.assert_called()
 
-    @unittest.skip("Bug: event 20 does not increase connectRetryCounter")
     @edge(ST_OPENCONFIRM, 20)
     def test_OpenConfirm_event_20(self, event=20):
+        self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENCONFIRM, 21)
@@ -1043,6 +1049,7 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
 
     @edge(ST_ESTABLISHED, 20)
     def test_Established_event_20(self, event=20):
+        self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
 
     @edge(ST_ESTABLISHED, 21)
