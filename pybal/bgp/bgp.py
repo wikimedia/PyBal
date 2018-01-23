@@ -894,7 +894,7 @@ class FSM(object):
         self.initial_idle_state = True
 
     def log(self, msg, lvl=logging.DEBUG):
-        s = "bgp@{}".format(hex(id(self)))
+        s = "bgp.FSM@{}".format(hex(id(self)))
         _log(msg, lvl, s)
 
     def __setattr__(self, name, value):
@@ -1447,7 +1447,7 @@ class BGP(protocol.Protocol):
         self.receiveBuffer = ''
 
     def log(self, msg, lvl=logging.DEBUG):
-        s = "bgp@{}".format(hex(id(self)))
+        s = "bgp.BGP@{}".format(hex(id(self)))
         _log(msg, lvl, s)
 
     def connectionMade(self):
@@ -1949,7 +1949,7 @@ class BGPFactory(protocol.Factory):
     bgpId = None
 
     def log(self, msg, lvl=logging.DEBUG):
-        s = "bgp@{}".format(hex(id(self)))
+        s = "bgp.BGPFactory@{}".format(hex(id(self)))
         _log(msg, lvl, s)
 
     def buildProtocol(self, addr):
