@@ -223,10 +223,11 @@ class CoordinatorTestCase(PyBalTestCase):
         self.coordinator.repool(cp1045)
         self.assertNotIn(cp1045, self.coordinator.pooledDownServers)
 
-        # With depool threshold at 0.5, cp1046 should also have been repooled
+        # With depool threshold at 0.5, cp1046 should have been depooled
+        cp1046 = self.coordinator.servers['cp1046.eqiad.wmnet']
         self.assertEqual(self.coordinator.lvsservice.getDepoolThreshold(), 0.5)
+        self.coordinator.lvsservice.removeServer.assert_called_with(cp1046)
         self.assertFalse(self.coordinator.pooledDownServers)
-        self.assertTrue(self.coordinator.servers['cp1046.eqiad.wmnet'].pooled)
 
     def test2serversCanDepool(self):
         servers = {
