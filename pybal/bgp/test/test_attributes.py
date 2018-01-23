@@ -95,7 +95,6 @@ class AttributeTestCase(unittest.TestCase):
         s = str(self.attr)
         self.assertTrue(isinstance(s, str))
 
-    @unittest.skip("Bug: exceptions.RuntimeError: maximum recursion depth exceeded")
     def testEquality(self):
         if self.DUT is None:
             return
