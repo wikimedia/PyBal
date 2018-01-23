@@ -846,7 +846,7 @@ class FSM(object):
     largeHoldTime = 4*60
     sendNotificationWithoutOpen = True    # No bullshit
 
-    metric_labelnames = {'asn', 'state', 'local_peer', 'remote_peer', 'side'}
+    metric_labelnames = {'asn', 'state', 'local_ip', 'remote_ip', 'side'}
     metric_keywords = {
         'labelnames': metric_labelnames,
         'namespace': 'pybal',
@@ -854,7 +854,7 @@ class FSM(object):
     }
 
     metrics = {
-        'bgp_session_state': Gauge('session_state',
+        'bgp_session_state_count': Gauge('session_state_count',
                                    'Number of sessions in the specified state',
                                    **metric_keywords)
     }
@@ -883,13 +883,13 @@ class FSM(object):
 
         self.metric_labels = {
             'state': stateDescr[self.state],
-            'asn': None,
-            'local_peer': None,
-            'remote_peer': None,
+            'local_asn': None,
+            'local_ip': None,
+            'remote_ip': None,
             'side': None
         }
         if self.bgpPeering:
-            self.metric_labels['asn'] = self.bgpPeering.myASN
+            self.metric_labels['local_asn'] = self.bgpPeering.myASN
 
         self.initial_idle_state = True
 
@@ -904,13 +904,13 @@ class FSM(object):
         super(FSM, self).__setattr__(name, value)
 
     def __update_metrics(self, new_state):
-        if self.metric_labels['local_peer'] and self.metric_labels['remote_peer']:
+        if self.metric_labels['local_ip'] and self.metric_labels['remote_ip']:
                 if not self.initial_idle_state:
-                    self.metrics['bgp_session_state'].labels(**self.metric_labels).dec()
+                    self.metrics['bgp_session_state_count'].labels(**self.metric_labels).dec()
                 else:
                     self.initial_idle_state = False
                 self.metric_labels['state'] = stateDescr[new_state]
-                self.metrics['bgp_session_state'].labels(**self.metric_labels).inc()
+                self.metrics['bgp_session_state_count'].labels(**self.metric_labels).inc()
 
     def manualStart(self):
         """
@@ -959,8 +959,8 @@ class FSM(object):
         established with the peer. (events 16, 17)
         """
 
-        self.metric_labels['local_peer'] = self.protocol.transport.getHost().host
-        self.metric_labels['remote_peer'] = self.protocol.transport.getPeer().host
+        self.metric_labels['local_ip'] = self.protocol.transport.getHost().host
+        self.metric_labels['remote_ip'] = self.protocol.transport.getPeer().host
         if self.protocol.transport.getPeer().port == PORT:
             self.metric_labels['side'] = 'active'
         else:
@@ -1997,7 +1997,7 @@ class BGPPeering(BGPFactory):
 
     implements(IBGPPeering, interfaces.IPushProducer)
 
-    metric_labelnames = {'asn', 'peer'}
+    metric_labelnames = {'local_asn', 'peer'}
     metric_keywords = {
         'labelnames': metric_labelnames,
         'namespace': 'pybal',
@@ -2022,7 +2022,7 @@ class BGPPeering(BGPFactory):
         self.consumers = set()
 
         self.metric_labels = {
-            'asn': self.myASN,
+            'local_asn': self.myASN,
             'peer': self.peerAddr
         }
         self.metrics = BGPPeering.metrics
