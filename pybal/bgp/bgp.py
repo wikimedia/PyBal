@@ -208,6 +208,34 @@ class FSM(object):
     largeHoldTime = 4*60
     sendNotificationWithoutOpen = True    # No bullshit
 
+    eventMethods = {
+        1:  'manualStart',
+        2:  'manualStop',
+        3:  'automaticStart',
+
+        9:  'connectRetryTimeEvent',
+        10: 'holdTimeEvent',
+        11: 'keepAliveEvent',
+        12: 'delayOpenEvent',
+        13: 'idleHoldTimeEvent',
+
+        17: 'connectionMade',
+        18: 'connectionFailed',
+        19: 'openReceived',
+        20: 'openReceived',
+        21: 'headerError',
+        22: 'openMessageError',
+        23: 'openCollisionDump',
+        24: 'versionError',
+
+        26: 'keepAliveReceived',
+        27: 'updateReceived',
+        28: 'updateError'
+    }
+
+    bgpTimers = { 'connectRetryTimer', 'holdTimer', 'keepAliveTimer',
+        'delayOpenTimer', 'idleHoldTimer' }
+
     metric_labelnames = {'local_asn', 'state', 'local_ip', 'remote_ip', 'side'}
     metric_keywords = {
         'labelnames': metric_labelnames,

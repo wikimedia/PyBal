@@ -12,3 +12,4 @@ from .test_ip import *
 from .test_bgp import *
 from .test_exceptions import *
 from .test_attributes import *
+from .test_fsm import *
