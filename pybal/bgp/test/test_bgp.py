@@ -26,24 +26,24 @@ class BGPUpdateMessageTestCase(unittest.TestCase):
 
     def setUp(self):
         self.msg = bgp.BGPUpdateMessage()
-        self.assertEquals(self.msg.msgLenOffset, 16)
-        self.assertEquals(len(self.msg.msg), 4)
-        self.assertEquals(len(self.msg), 23)
+        self.assertEqual(self.msg.msgLenOffset, 16)
+        self.assertEqual(len(self.msg.msg), 4)
+        self.assertEqual(len(self.msg), 23)
         self.assertIn("UPDATE", repr(self.msg))
 
     def testAddSomeWithdrawals(self):
-        self.assertEquals(self.msg.addSomeWithdrawals(set()), 0)
+        self.assertEqual(self.msg.addSomeWithdrawals(set()), 0)
 
         prefixset = set([ip.IPv4IP('127.0.0.1'),])
-        self.assertEquals(self.msg.addSomeWithdrawals(prefixset), 1)
+        self.assertEqual(self.msg.addSomeWithdrawals(prefixset), 1)
 
         # The prefix should have been removed from the set
-        self.assertEquals(len(prefixset), 0)
+        self.assertEqual(len(prefixset), 0)
 
         prefixset = set([ ip.IPv4IP(idx) for idx in range(1024) ])
         # Not all prefixes will fit within maxLen
-        self.assertEquals(self.msg.addSomeWithdrawals(prefixset), 813)
-        self.assertEquals(len(prefixset), 211)
+        self.assertEqual(self.msg.addSomeWithdrawals(prefixset), 813)
+        self.assertEqual(len(prefixset), 211)
 
     def testAttributes(self):
         self.msg.addAttributes(attributes.FrozenAttributeDict({}))
@@ -51,28 +51,28 @@ class BGPUpdateMessageTestCase(unittest.TestCase):
         self.msg.addAttributes(self.attrs)
         self.assertEqual(len(self.msg), 50)
         self.msg.clearAttributes()
-        self.assertEquals(len(self.msg), 23)
+        self.assertEqual(len(self.msg), 23)
 
         prefixset = set([ ip.IPv4IP(idx) for idx in range(810) ])
-        self.assertEquals(self.msg.addSomeWithdrawals(prefixset), 810)
+        self.assertEqual(self.msg.addSomeWithdrawals(prefixset), 810)
         self.assertRaises(ValueError, self.msg.addAttributes, self.attrs)
 
     def testAddSomeNLRI(self):
-        self.assertEquals(self.msg.addSomeNLRI(set()), 0)
+        self.assertEqual(self.msg.addSomeNLRI(set()), 0)
 
         prefixset = set([ip.IPv6IP('::1'),])
-        self.assertEquals(self.msg.addSomeNLRI(prefixset), 1)
+        self.assertEqual(self.msg.addSomeNLRI(prefixset), 1)
 
         # The prefix should have been removed from the set
-        self.assertEquals(len(prefixset), 0)
+        self.assertEqual(len(prefixset), 0)
 
         prefixset = set([ ip.IPv6IP(hex(idx)) for idx in range(1024) ])
         # Not all prefixes will fit within maxLen
-        self.assertEquals(self.msg.addSomeNLRI(prefixset), 238)
-        self.assertEquals(len(prefixset), 1024-238)
+        self.assertEqual(self.msg.addSomeNLRI(prefixset), 238)
+        self.assertEqual(len(prefixset), 1024-238)
 
     def testFreeSpace(self):
-        self.assertEquals(self.msg.freeSpace(), bgp.MAX_LEN-len(self.msg))
+        self.assertEqual(self.msg.freeSpace(), bgp.MAX_LEN-len(self.msg))
 
 class BGPTestCase(unittest.TestCase):
     MSG_DATA_OPEN = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
@@ -166,7 +166,7 @@ class BGPTestCase(unittest.TestCase):
 
         # Verify whether parseOpen returns the correct Open parameters
         t = self.proto.parseOpen(str(msgdata))
-        self.assertEquals(t, (bgp.VERSION, self.factory.myASN, self.proto.fsm.holdTime, bgpId))
+        self.assertEqual(t, (bgp.VERSION, self.factory.myASN, self.proto.fsm.holdTime, bgpId))
 
         # Verify whether a truncated message raises BadMessageLength
         self.assertRaises(exceptions.BadMessageLength, self.proto.parseOpen, str(msgdata[:3]))
@@ -201,28 +201,28 @@ class BGPTestCase(unittest.TestCase):
     def testParseUpdate(self):
         # Test empty UPDATE
         update = bgp.BGPUpdateMessage()
-        self.assertEquals(self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:]), ([], [], []))
+        self.assertEqual(self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:]), ([], [], []))
 
         # Add withdrawals
         withdrawals = [ip.IPPrefix("192.168.{0}.0/24".format(i)) for i in range(100)]
         update.addSomeWithdrawals(set(withdrawals))
         r = self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:])
         self.assertListEqual(sorted(r[0]), withdrawals)
-        self.assertEquals(r[1:], ([], []))
+        self.assertEqual(r[1:], ([], []))
 
         # Add some attributes
         update.addAttributes(BGPUpdateMessageTestCase.attrs)
         r = self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:])
         self.assertListEqual(sorted(r[0]), withdrawals)
-        self.assertEquals(len(r[1]), len(BGPUpdateMessageTestCase.attrs))
-        self.assertEquals(r[2:], ([], ))
+        self.assertEqual(len(r[1]), len(BGPUpdateMessageTestCase.attrs))
+        self.assertEqual(r[2:], ([], ))
 
         # ...and some NLRI
         nlri = [ip.IPPrefix("10.{0}.3.0/24".format(i)) for i in range(100)]
         update.addSomeNLRI(set(nlri))
         r = self.proto.parseUpdate(bytes(update)[bgp.HDR_LEN:])
         self.assertListEqual(sorted(r[0]), withdrawals)
-        self.assertEquals(len(r[1]), len(BGPUpdateMessageTestCase.attrs))
+        self.assertEqual(len(r[1]), len(BGPUpdateMessageTestCase.attrs))
         self.assertListEqual(sorted(r[2]), nlri)
 
         # Test a malformed message
@@ -239,7 +239,7 @@ class BGPTestCase(unittest.TestCase):
         # Verify whether a valid NOTIFICATION parses correctly
         msg = (struct.pack('!BB', bgp.ERR_MSG_UPDATE,
             bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH) + b"Unit test")
-        self.assertEquals(self.proto.parseNotification(msg),
+        self.assertEqual(self.proto.parseNotification(msg),
             (bgp.ERR_MSG_UPDATE, bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH, b"Unit test"))
         # Verify a truncated message raises BadMessageLength
         self.assertRaises(exceptions.BadMessageLength, self.proto.parseNotification, b' ')
