@@ -895,6 +895,10 @@ class FSM(object):
 
     def log(self, msg, lvl=logging.DEBUG):
         s = "bgp.FSM@{}".format(hex(id(self)))
+        if self.protocol is not None:
+            s += " peer {}".format(self.protocol.peerAddrStr())
+        elif self.bgpPeering is not None:
+            s += " peer {}".format(self.bgpPeering.peerAddr)
         _log(msg, lvl, s)
 
     def __setattr__(self, name, value):
@@ -1446,8 +1450,16 @@ class BGP(protocol.Protocol):
         self.disconnected = False
         self.receiveBuffer = ''
 
+    def peerAddrStr(self):
+        if self.transport:
+            peer = self.transport.getPeer()
+            return "{}:{}".format(peer.host, peer.port)
+        else:
+            return "(none)"
+
     def log(self, msg, lvl=logging.DEBUG):
-        s = "bgp.BGP@{}".format(hex(id(self)))
+
+        s = "bgp.BGP@{} peer {}".format(hex(id(self)), self.peerAddrStr())
         _log(msg, lvl, s)
 
     def connectionMade(self):
