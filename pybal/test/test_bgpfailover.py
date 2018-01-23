@@ -10,7 +10,7 @@
 import pybal.bgpfailover
 import pybal.util
 
-from pybal.bgp import bgp
+from pybal.bgp import bgp, ip as bgpip, attributes
 
 from twisted.internet.error import CannotListenError
 
@@ -105,18 +105,18 @@ class TestBGPFailover(PyBalTestCase):
         bgpfailover = pybal.bgpfailover.BGPFailover(config)
         bgpfailover.associateService('192.168.1.1', None, med=None)
         bgpfailover.associateService('::1', None, med=20)
-        # bgpfailover.prefixes = {(1, 1): {bgp.IPv4IP('192.168.1.1')},
-        #                         (2, 1): {bgp.IPv6IP('fe80::1')}}
+        # bgpfailover.prefixes = {(1, 1): {bgpip.IPv4IP('192.168.1.1')},
+        #                         (2, 1): {bgpip.IPv6IP('fe80::1')}}
         advertisements = bgpfailover.buildAdvertisements()
         self.assertEquals(len(advertisements), 2)
         self.assertTrue(all([isinstance(ad, bgp.Advertisement) for ad in advertisements]))
         # Check whether the right prefixes are being advertised
         self.assertSetEqual(
             {ad.prefix for ad in advertisements},
-            {bgp.IPv4IP('192.168.1.1'), bgp.IPv6IP('::1')})
+            {bgpip.IPv4IP('192.168.1.1'), bgpip.IPv6IP('::1')})
         # Test whether the correct MEDs are present in advertisements
         self.assertSetEqual(
-            {ad.attributes[bgp.MEDAttribute].value for ad in advertisements},
+            {ad.attributes[attributes.MEDAttribute].value for ad in advertisements},
             {10, 20})
         # Test whether required attributes are present
         for ad in advertisements:
@@ -125,12 +125,12 @@ class TestBGPFailover(PyBalTestCase):
                 self.assertIsInstance(hash(attribute), int)
             if ad.addressfamily[0] == bgp.AFI_INET:
                 self.assertTrue(set(ad.attributes.keys()).issuperset(
-                    {bgp.OriginAttribute, bgp.ASPathAttribute, bgp.NextHopAttribute}))
+                    {attributes.OriginAttribute, attributes.ASPathAttribute, attributes.NextHopAttribute}))
             elif ad.addressfamily[0] == bgp.AFI_INET6:
                 self.assertTrue(set(ad.attributes.keys()).issuperset(
-                    {bgp.OriginAttribute, bgp.ASPathAttribute, bgp.MPReachNLRIAttribute}))
+                    {attributes.OriginAttribute, attributes.ASPathAttribute, attributes.MPReachNLRIAttribute}))
 
-        bgpfailover.prefixes[(6, 66)] = bgp.IPv6IP('6:66')
+        bgpfailover.prefixes[(6, 66)] = bgpip.IPv6IP('6:66')
         self.assertRaises(ValueError, bgpfailover.buildAdvertisements)
 
     def testCloseSession(self):
@@ -146,19 +146,19 @@ class TestBGPFailover(PyBalTestCase):
         bgpfailover = self.bgpfailover
         mockService = mock.MagicMock()
 
-        ip = bgp.IPv4IP("1.2.3.4")
+        ip = bgpip.IPv4IP("1.2.3.4")
         bgpfailover.associateService('1.2.3.4', mockService, None)
         self.assertSetEqual(bgpfailover.prefixes[(1, 1)], {ip})
         self.assertEqual(bgpfailover.ipServices[ip][0]['af'], (1, 1))
         self.assertEqual(bgpfailover.ipServices[ip][0]['med'], None)
 
-        ip = bgp.IPv6IP("1:2:3:4:5:6:7:8")
+        ip = bgpip.IPv6IP("1:2:3:4:5:6:7:8")
         bgpfailover.associateService('1:2:3:4:5:6:7:8', mockService, 66)
         self.assertSetEqual(bgpfailover.prefixes[(2, 1)], {ip})
         self.assertEqual(bgpfailover.ipServices[ip][0]['af'], (2, 1))
         self.assertEqual(bgpfailover.ipServices[ip][0]['med'], 66)
 
-        ip = bgp.IPv4IP("1.2.3.4")
+        ip = bgpip.IPv4IP("1.2.3.4")
         bgpfailover.associateService('1.2.3.4', mockService, None)
         self.assertSetEqual(bgpfailover.prefixes[(1, 1)], {ip})
         self.assertEqual(bgpfailover.ipServices[ip][1]['af'], (1, 1))

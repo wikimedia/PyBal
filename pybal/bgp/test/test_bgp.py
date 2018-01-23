@@ -7,7 +7,7 @@
 
 """
 
-from .. import ip, bgp
+from .. import ip, bgp, exceptions, attributes
 
 import unittest, mock, struct
 
@@ -17,24 +17,12 @@ from twisted.internet import task
 from twisted.internet.error import ConnectionLost
 from twisted.internet.address import IPv4Address, IPv6Address
 
-class AttributeTestCase(unittest.TestCase):
-
-    def testOriginAttribute(self):
-        attr = bgp.OriginAttribute()
-        self.assertFalse(attr.optional)
-        self.assertTrue(attr.transitive)
-        self.assertEquals(attr.value, attr.ORIGIN_IGP)
-
-    def testBaseASPathAttribute(self):
-        attr = bgp.BaseASPathAttribute()
-        self.assertEquals(attr.value, [(2, [])])
-
 class BGPUpdateMessageTestCase(unittest.TestCase):
-    attrs = bgp.FrozenAttributeDict(
-                [bgp.OriginAttribute(),
-                bgp.ASPathAttribute([64600, 64601]),
-                bgp.NextHopAttribute("192.0.2.1"),
-                bgp.MEDAttribute(100)])
+    attrs = attributes.FrozenAttributeDict(
+                [attributes.OriginAttribute(),
+                attributes.ASPathAttribute([64600, 64601]),
+                attributes.NextHopAttribute("192.0.2.1"),
+                attributes.MEDAttribute(100)])
 
     def setUp(self):
         self.msg = bgp.BGPUpdateMessage()
@@ -58,7 +46,7 @@ class BGPUpdateMessageTestCase(unittest.TestCase):
         self.assertEquals(len(prefixset), 211)
 
     def testAttributes(self):
-        self.msg.addAttributes(bgp.FrozenAttributeDict({}))
+        self.msg.addAttributes(attributes.FrozenAttributeDict({}))
         self.assertEqual(len(self.msg), 23)
         self.msg.addAttributes(self.attrs)
         self.assertEqual(len(self.msg), 50)
@@ -181,7 +169,7 @@ class BGPTestCase(unittest.TestCase):
         self.assertEquals(t, (bgp.VERSION, self.factory.myASN, self.proto.fsm.holdTime, bgpId))
 
         # Verify whether a truncated message raises BadMessageLength
-        self.assertRaises(bgp.BadMessageLength, self.proto.parseOpen, str(msgdata[:3]))
+        self.assertRaises(exceptions.BadMessageLength, self.proto.parseOpen, str(msgdata[:3]))
 
         with mock.patch.object(self.proto.fsm, 'openMessageError') as mock_method:
             # Verify whether any BGP version other than bgp.VERSION (4) raises
@@ -245,7 +233,7 @@ class BGPTestCase(unittest.TestCase):
         self.assertRaises(Exception, self.proto.parseUpdate, msgdata)
 
     def testParseKeepAlive(self):
-        self.assertRaises(bgp.BadMessageLength, self.proto.parseKeepAlive, b' ')
+        self.assertRaises(exceptions.BadMessageLength, self.proto.parseKeepAlive, b' ')
 
     def testParseNotification(self):
         # Verify whether a valid NOTIFICATION parses correctly
@@ -254,7 +242,7 @@ class BGPTestCase(unittest.TestCase):
         self.assertEquals(self.proto.parseNotification(msg),
             (bgp.ERR_MSG_UPDATE, bgp.ERR_MSG_UPDATE_MALFORMED_ASPATH, b"Unit test"))
         # Verify a truncated message raises BadMessageLength
-        self.assertRaises(bgp.BadMessageLength, self.proto.parseNotification, b' ')
+        self.assertRaises(exceptions.BadMessageLength, self.proto.parseNotification, b' ')
 
 class NaiveBGPPeeringTestCase(unittest.TestCase):
 
@@ -270,20 +258,20 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
         self.peering.toAdvertise = {(1, 1): set([]),
                                     (2, 1): set([])}
 
-        med = bgp.MEDAttribute(50)
-        aspath = bgp.ASPathAttribute([(2, [64496])])
-        origin = bgp.OriginAttribute((0))
+        med = attributes.MEDAttribute(50)
+        aspath = attributes.ASPathAttribute([(2, [64496])])
+        origin = attributes.OriginAttribute((0))
 
         self.attrs = {
-            bgp.MEDAttribute: med,
-            bgp.ASPathAttribute: aspath,
-            bgp.OriginAttribute: origin,
+            attributes.MEDAttribute: med,
+            attributes.ASPathAttribute: aspath,
+            attributes.OriginAttribute: origin,
         }
 
     def testSetV4Advertisements(self):
-        nexthop = bgp.NextHopAttribute('10.192.16.139')
+        nexthop = attributes.NextHopAttribute('10.192.16.139')
 
-        self.attrs[bgp.NextHopAttribute] = nexthop
+        self.attrs[attributes.NextHopAttribute] = nexthop
 
         adv_v4 = bgp.Advertisement(prefix=ip.IPv4IP('10.2.1.18'),
                                    attributes=self.attrs,
@@ -295,10 +283,10 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
         self.peering.setAdvertisements(set())
 
     def testSetV6Advertisements(self):
-        nlri = bgp.MPReachNLRIAttribute((bgp.AFI_INET6, bgp.SAFI_UNICAST,
-            bgp.IPv6IP('2620:0:860:101:10:192:1:3'), []))
+        nlri = attributes.MPReachNLRIAttribute((bgp.AFI_INET6, bgp.SAFI_UNICAST,
+            ip.IPv6IP('2620:0:860:101:10:192:1:3'), []))
 
-        self.attrs[bgp.MPReachNLRIAttribute] = nlri
+        self.attrs[attributes.MPReachNLRIAttribute] = nlri
 
         adv_v6 = bgp.Advertisement(prefix=ip.IPv6IP('2620:0:860:ed1a:0:0:0:1'),
                                    attributes=self.attrs,
@@ -365,14 +353,14 @@ class BGPUpdateParserTestCase(unittest.TestCase):
 
     MSG_UPDATE_WITHDRAWN_PREFIXES = []
     MSG_UPDATE_ATTRIBUTES = [
-        bgp.BaseOriginAttribute(value='\x00').tuple(),
-        (64, 2, ''),  #  bgp.BaseASPathAttribute(value='').tuple()
-        (64, 3, '\x03\x03\x03\x03'),  # bgp.NextHopAttribute(value='3.3.3.3').tuple(),
-        bgp.BaseMEDAttribute(value='\x00\x00\x00\x00').tuple(),
-        (64, 5, '\x00\x00\x00d') # bgp.BaseLocalPrefAttribute(value=100).tuple()
+        attributes.BaseOriginAttribute(value='\x00').tuple(),
+        (64, 2, ''),  #  attributes.BaseASPathAttribute(value='').tuple()
+        (64, 3, '\x03\x03\x03\x03'),  # attributes.NextHopAttribute(value='3.3.3.3').tuple(),
+        attributes.BaseMEDAttribute(value='\x00\x00\x00\x00').tuple(),
+        (64, 5, '\x00\x00\x00d') # attributes.BaseLocalPrefAttribute(value=100).tuple()
     ]
-    MSG_UPDATE_NLRI = [bgp.IPPrefix('10.30.3.0/24'), bgp.IPPrefix('10.30.2.0/24'),
-                       bgp.IPPrefix('10.30.1.0/24')]
+    MSG_UPDATE_NLRI = [ip.IPPrefix('10.30.3.0/24'), ip.IPPrefix('10.30.2.0/24'),
+                       ip.IPPrefix('10.30.1.0/24')]
 
     def setUp(self):
         self.bgp = bgp.BGP()

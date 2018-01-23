@@ -11,7 +11,8 @@ from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 
 from pybal.util import log
-from pybal.bgp import bgp
+from pybal.bgp import bgp, attributes as attrs
+from pybal.bgp.ip import IPv4IP, IPv6IP
 from pybal.metrics import Gauge
 
 
@@ -111,15 +112,15 @@ class BGPFailover:
         return peering.manualStop()
 
     def buildAdvertisements(self):
-        baseAttrs = bgp.AttributeDict([bgp.OriginAttribute(), bgp.ASPathAttribute(self.asPath)])
+        baseAttrs = attrs.AttributeDict([attrs.OriginAttribute(), attrs.ASPathAttribute(self.asPath)])
 
         advertisements = set()
         for af in self.prefixes:
             afAttrs = bgp.AttributeDict(baseAttrs)
             if af[0] == (bgp.AFI_INET):
-                afAttrs[bgp.NextHopAttribute] = bgp.NextHopAttribute(self.nexthopIPv4)
+                afAttrs[attrs.NextHopAttribute] = attrs.NextHopAttribute(self.nexthopIPv4)
             elif af[0] == (bgp.AFI_INET6):
-                afAttrs[bgp.MPReachNLRIAttribute] = bgp.MPReachNLRIAttribute((af[0], af[1], bgp.IPv6IP(self.nexthopIPv6), []))
+                afAttrs[attrs.MPReachNLRIAttribute] = attrs.MPReachNLRIAttribute((af[0], af[1], IPv6IP(self.nexthopIPv6), []))
             else:
                 raise ValueError("Unsupported address family {}".format(af))
 
@@ -128,11 +129,11 @@ class BGPFailover:
                 # This service IP may use a non-default MED
                 med = self.ipServices[prefix][0]['med'] # Guaranteed to exist, may be None
                 if med is None:
-                    attributes[bgp.MEDAttribute] = bgp.MEDAttribute(self.defaultMED)
+                    attributes[attrs.MEDAttribute] = attrs.MEDAttribute(self.defaultMED)
                 else:
-                    attributes[bgp.MEDAttribute] = bgp.MEDAttribute(med)
+                    attributes[attrs.MEDAttribute] = attrs.MEDAttribute(med)
 
-                attributes = bgp.FrozenAttributeDict(attributes)
+                attributes = attrs.FrozenAttributeDict(attributes)
                 advertisements.add(bgp.Advertisement(prefix, attributes, af))
 
         return advertisements
@@ -141,10 +142,10 @@ class BGPFailover:
     def associateService(cls, ip, lvsservice, med):
         if ':' not in ip:
             af = (bgp.AFI_INET, bgp.SAFI_UNICAST)
-            prefix = bgp.IPv4IP(ip)
+            prefix = IPv4IP(ip)
         else:
             af = (bgp.AFI_INET6, bgp.SAFI_UNICAST)
-            prefix = bgp.IPv6IP(ip)
+            prefix = IPv6IP(ip)
 
         # All services need to agree on the same MED for this IP
         if prefix in cls.ipServices and not med == cls.ipServices[prefix][0]['med']:
