@@ -464,11 +464,12 @@ class FSM(object):
         (event 21)
         """
 
-        self.protocol.sendNotification(ERR_MSG_HDR, suberror, data)
-        # Note: RFC4271 states that we should send ERR_FSM in the
-        # Established state, which contradicts earlier statements.
-        self._errorClose()
-        raise NotificationSent(self.protocol, ERR_MSG_HDR, suberror, data)
+        if self.state != ST_IDLE:
+            self.protocol.sendNotification(ERR_MSG_HDR, suberror, data)
+            # Note: RFC4271 states that we should send ERR_FSM in the
+            # Established state, which contradicts earlier statements.
+            self._errorClose()
+            raise NotificationSent(self.protocol, ERR_MSG_HDR, suberror, data)
 
     def openMessageError(self, suberror, data=''):
         """
@@ -476,11 +477,12 @@ class FSM(object):
         (event 22)
         """
 
-        self.protocol.sendNotification(ERR_MSG_OPEN, suberror, data)
-        # Note: RFC4271 states that we should send ERR_FSM in the
-        # Established state, which contradicts earlier statements.
-        self._errorClose()
-        raise NotificationSent(self.protocol, ERR_MSG_OPEN, suberror, data)
+        if self.state != ST_IDLE:
+            self.protocol.sendNotification(ERR_MSG_OPEN, suberror, data)
+            # Note: RFC4271 states that we should send ERR_FSM in the
+            # Established state, which contradicts earlier statements.
+            self._errorClose()
+            raise NotificationSent(self.protocol, ERR_MSG_OPEN, suberror, data)
 
     def keepAliveReceived(self):
         """

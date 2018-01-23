@@ -252,18 +252,8 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
     def test_Idle_event_17(self, event=17):
         self._testIgnoreEvent(eventMethods[event])
 
-    @unittest.skip("Bug: headerError shouldn't do anything in ST_IDLE")
-    @edge(ST_IDLE, 21)
-    def test_Idle_event_21(self, event=21):
-        self._testIgnoreEvent(eventMethods[event])
-
-    @unittest.skip("Bug: openMessageError shouldn't do anything in ST_IDLE")
-    @edge(ST_IDLE, 22)
-    def test_Idle_event_22(self, event=22):
-        self._testIgnoreEvent(eventMethods[event])
-
-    @edge(ST_IDLE, 27, 28)
-    def test_Idle_event_27_28(self, event):
+    @edge(ST_IDLE, 21, 22, 27, 28)
+    def test_Idle_event_21_22_27_28(self, event):
         self._testIgnoreEvent(eventMethods[event], '')
 
 @replicate_tests
