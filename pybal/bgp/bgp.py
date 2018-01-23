@@ -227,7 +227,7 @@ class FSM(object):
         22: 'openMessageError',
         23: 'openCollisionDump',
         24: 'versionError',
-
+        25: 'notificationReceived',
         26: 'keepAliveReceived',
         27: 'updateReceived',
         28: 'updateError'
@@ -535,6 +535,8 @@ class FSM(object):
         else:
             if self.state != ST_IDLE:
                 # State != Idle, events 24, 25
+                if self.state == ST_OPENSENT:
+                    self.protocol.sendNotification(ERR_FSM, 0)
                 self._errorClose()
 
     def updateReceived(self, update):
