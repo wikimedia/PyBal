@@ -150,6 +150,7 @@ class Coordinator:
         assert server.pooled
 
         if self.canDepool():
+            server.pooled = False
             self.lvsservice.removeServer(server)
             self.pooledDownServers.discard(server)
             self.metrics['servers_pooled'].labels(**self.metric_labels).dec()
@@ -170,6 +171,7 @@ class Coordinator:
         assert server.enabled and server.ready
 
         if not server.pooled:
+            server.pooled = True
             self.lvsservice.addServer(server)
             self.metrics['servers_pooled'].labels(**self.metric_labels).inc()
         else:

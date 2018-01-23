@@ -73,6 +73,16 @@ class StubLVSService(object):
         self.scheduler = scheduler
         self.configuration = configuration
 
+    def assignServers(self, newServers):
+        for server in (self.servers | newServers):
+            server.is_pooled = (server in newServers)
+        self.servers = newServers
+
+    def addServer(self, server):
+        server.is_pooled = True
+
+    def removeServer(self, server):
+        server.is_pooled = False
 
 
 class MockClientGetPage(object):

@@ -232,11 +232,16 @@ class LVSService:
              for server in self.servers - newServers]
         )
 
-        self.servers = newServers
         self.ipvsManager.modifyState(cmdList)
+        # Ensure both old and new servers have up to date is_pooled status
+        for server in (self.servers | newServers):
+            server.is_pooled = (server in newServers)
+        self.servers = newServers
 
     def addServer(self, server):
         """Adds (pools) a single Server to the LVS state."""
+
+        assert server.pooled
 
         if server not in self.servers:
             cmdList = [self.ipvsManager.commandAddServer(self.service(),
@@ -249,18 +254,20 @@ class LVSService:
         self.servers.add(server)
 
         self.ipvsManager.modifyState(cmdList)
-        server.pooled = True
+        server.is_pooled = True
 
     def removeServer(self, server):
         """Removes (depools) a single Server from the LVS state."""
+
+        assert not server.pooled
 
         cmdList = [self.ipvsManager.commandRemoveServer(self.service(),
                                                         server)]
 
         self.servers.remove(server)  # May raise KeyError
 
-        server.pooled = False
         self.ipvsManager.modifyState(cmdList)
+        server.is_pooled = False
 
     def initServer(self, server):
         """Initializes a server instance with LVS service specific

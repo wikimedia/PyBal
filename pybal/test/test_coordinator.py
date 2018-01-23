@@ -31,6 +31,13 @@ class CoordinatorTestCase(PyBalTestCase):
         self.coordinator.lvsservice.getDepoolThreshold = mock.MagicMock(
                 return_value=0.5)
 
+        self.coordinator.lvsservice.assignServers = mock.MagicMock(
+            side_effect=self.lvsservice.assignServers)
+        self.coordinator.lvsservice.addServer = mock.MagicMock(
+            side_effect=self.lvsservice.addServer)
+        self.coordinator.lvsservice.removeServer = mock.MagicMock(
+            side_effect=self.lvsservice.removeServer)
+
     def tearDown(self):
         self.coordinator.configObserver.reloadTask.stop()
 
@@ -55,7 +62,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1046.eqiad.wmnet': {},
             'cp1047.eqiad.wmnet': {}
         }
-        self.setServers(servers, pooled=True)
+        self.setServers(servers, pooled=True, is_pooled=True)
 
         # All hosts should get assigned
         self.coordinator.assignServers()
@@ -78,6 +85,9 @@ class CoordinatorTestCase(PyBalTestCase):
         self.coordinator.assignServers()
         self.coordinator.lvsservice.assignServers.assert_called_with(
             set([self.coordinator.servers['cp1047.eqiad.wmnet']]))
+        self.assertTrue(self.coordinator.servers['cp1047.eqiad.wmnet'].is_pooled)
+        for server in self.coordinator.servers.itervalues():
+            self.assertEquals(server.pooled, server.is_pooled, server.host)
 
     def testRefreshModifiedServers(self):
         servers = {
@@ -185,7 +195,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, pooled=True)
+        self.setServers(servers, pooled=True, is_pooled=True)
         self.assertTrue(self.coordinator.canDepool()) # threshold is mocked at .5
 
         # 2/2 servers up, can depool
@@ -193,6 +203,7 @@ class CoordinatorTestCase(PyBalTestCase):
         cp1045.up = False
         self.coordinator.depool(cp1045)
         self.coordinator.lvsservice.removeServer.assert_called_once_with(cp1045)
+        self.assertFalse(cp1045.is_pooled)
         self.assertNotIn(cp1045, self.coordinator.pooledDownServers)
 
         self.coordinator.lvsservice.reset_mock()
@@ -203,6 +214,7 @@ class CoordinatorTestCase(PyBalTestCase):
         self.assertFalse(self.coordinator.canDepool())
         self.coordinator.depool(cp1046)
         self.coordinator.lvsservice.removeServer.assert_not_called()
+        self.assertTrue(cp1046.is_pooled)
         self.assertIn(cp1046, self.coordinator.pooledDownServers)
 
     def testRepool(self):
@@ -210,23 +222,30 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, pooled=False, ready=True)
+        self.setServers(servers, pooled=False, is_pooled=False, ready=True)
 
         # The standard case
         cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
         self.coordinator.repool(cp1045)
+        self.assertTrue(cp1045.pooled)
         self.coordinator.lvsservice.addServer.assert_called_with(cp1045)
+        self.assertTrue(cp1045.is_pooled)
 
         # The previously-pooled-but-down case
-        self.setServers(servers, pooled=True, ready=True)
+        self.setServers(servers, pooled=True, is_pooled=True, ready=True)
+        # All known servers are pooled-but-down
         self.coordinator.pooledDownServers = set(self.coordinator.servers.itervalues())
         self.coordinator.repool(cp1045)
+        self.assertTrue(cp1045.pooled)
+        self.assertTrue(cp1045.is_pooled)
         self.assertNotIn(cp1045, self.coordinator.pooledDownServers)
 
         # With depool threshold at 0.5, cp1046 should have been depooled
         cp1046 = self.coordinator.servers['cp1046.eqiad.wmnet']
         self.assertEqual(self.coordinator.lvsservice.getDepoolThreshold(), 0.5)
         self.coordinator.lvsservice.removeServer.assert_called_with(cp1046)
+        self.assertFalse(cp1046.pooled)
+        self.assertFalse(cp1046.is_pooled)
         self.assertFalse(self.coordinator.pooledDownServers)
 
     def test2serversCanDepool(self):
