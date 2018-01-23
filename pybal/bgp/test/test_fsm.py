@@ -382,7 +382,6 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
             self.assertTimerInactive(self.fsm.holdTimer)
         self.assertState(ST_OPENCONFIRM)
 
-    @unittest.skip("Bug: typo in FSM.openReceived")
     @edge(ST_CONNECT, 20)
     def test_Connect_event_20_HoldTime_nonzero(self, event=20):
         self.assertGreater(self.fsm.holdTime, 0)
@@ -578,7 +577,6 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
             self.assertTimerInactive(self.fsm.holdTimer)
         self.assertState(ST_OPENCONFIRM)
 
-    @unittest.skip("Bug: typo in FSM.openReceived")
     @edge(ST_ACTIVE, 20)
     def test_Active_event_20_HoldTime_nonzero(self, event=20):
         self.assertGreater(self.fsm.holdTime, 0)

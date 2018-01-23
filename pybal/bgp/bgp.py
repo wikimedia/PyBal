@@ -419,8 +419,8 @@ class FSM(object):
                 self.protocol.sendOpen()
                 self.protocol.sendKeepAlive()
                 if self.holdTime != 0:
-                    self.KeepAliveTimer.reset(self.keepAliveTime)
-                    self.holdTimer.reset(self.holdTimer)
+                    self.keepAliveTimer.reset(self.keepAliveTime)
+                    self.holdTimer.reset(self.holdTime)
                 else:    # holdTime == 0
                     self.keepAliveTimer.cancel()
                     self.holdTimer.cancel()
