@@ -38,15 +38,197 @@ class CoordinatorTestCase(PyBalTestCase):
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
 
-    def setServers(self, servers):
-        self.coordinator.onConfigUpdate(config=servers)
+    def setServers(self, servers, **kwargs):
+        with mock.patch.object(pybal.server.Server, 'initialize') as mock_initialize:
+            self.coordinator.onConfigUpdate(config=servers)
 
         for server in self.coordinator.servers.itervalues():
             server.up = True
             server.enabled = True
+            for k, v in kwargs.iteritems():
+                setattr(server, k, v)
 
-    @mock.patch('pybal.server.Server.initialize')
-    def test2serversCanDepool(self, mock_initialize):
+    def testAssignServers(self):
+        # All servers enabled and up
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+            'cp1047.eqiad.wmnet': {}
+        }
+        self.setServers(servers, pooled=True)
+
+        # All hosts should get assigned
+        self.coordinator.assignServers()
+        self.coordinator.lvsservice.assignServers.assert_called_with(
+            set(self.coordinator.servers.itervalues()))
+        self.coordinator.lvsservice.assignServers.reset_mock()
+
+        # One host disabled and thus not pooled
+        self.coordinator.servers['cp1045.eqiad.wmnet'].enabled = False
+        self.coordinator.servers['cp1045.eqiad.wmnet'].pooled = False
+
+        # One host down and thus not pooled
+        self.coordinator.servers['cp1046.eqiad.wmnet'].up = False
+        self.coordinator.servers['cp1046.eqiad.wmnet'].pooled = False
+
+        # One host down but still pooled (depool threshold)
+        self.coordinator.servers['cp1047.eqiad.wmnet'].up = False
+
+        # Only 'pooled' hosts should get assigned
+        self.coordinator.assignServers()
+        self.coordinator.lvsservice.assignServers.assert_called_with(
+            set([self.coordinator.servers['cp1047.eqiad.wmnet']]))
+
+    def testRefreshModifiedServers(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+        self.setServers(servers, enabled=False, modified=True)
+
+        # cp1045 is not modified. It's down but pooled, pybal currently
+        # doesn't touch it (which is probably a bug)
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        cp1045.modified = False
+        cp1045.up = False
+        cp1045.pooled = True
+        cp1045.calcStatus = mock.MagicMock(return_value=cp1045.up)
+
+        self.coordinator.refreshModifiedServers()
+
+        # All modified servers should no longer have 'pooled' set (disabled)
+        self.assertTrue(all(
+            not server.pooled
+            for server in self.coordinator.servers.itervalues()
+            if server.modified))
+
+        # cp1045 shouldn't have been touched
+        cp1045.calcStatus.assert_not_called()
+        self.assertTrue(cp1045.pooled)
+
+        # TODO: check invariants?
+
+    def testResultDown(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+        self.setServers(servers)
+        # All enabled and up, but not pooled
+        self.assertTrue(all(
+            server.enabled and server.up and not server.pooled
+            for server in self.coordinator.servers.itervalues()))
+
+        mockMonitor = mock.MagicMock()
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        mockMonitor.server = cp1045
+
+        with mock.patch.object(self.coordinator, 'depool') as mockDepool:
+            self.coordinator.resultDown(mockMonitor, "fake down result")
+            self.assertFalse(cp1045.up)
+            mockDepool.assert_not_called() # wasn't pooled
+
+            # Test whether cp1045 gets depooled
+            mockDepool.reset_mock()
+            cp1045.up = True
+            cp1045.pooled = True
+            self.coordinator.resultDown(mockMonitor, None)
+            self.assertFalse(cp1045.up)
+            mockDepool.assert_called()
+
+    def testResultUp(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+        self.setServers(servers, ready=True)
+
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        cp1045.up = False
+        cp1045.calcStatus = mock.MagicMock(return_value=False)
+
+        mockMonitor = mock.MagicMock()
+        mockMonitor.server = cp1045
+
+        with mock.patch.object(self.coordinator, 'repool') as mockRepool:
+            # Another monitor is still down, nothing should happen
+            self.coordinator.resultUp(mockMonitor)
+            self.assertFalse(cp1045.up)
+            mockRepool.assert_not_called()
+
+            mockRepool.reset_mock()
+            cp1045.calcStatus.return_value = True
+
+            # Expect cp1045 to get repooled
+            self.coordinator.resultUp(mockMonitor)
+            self.assertTrue(cp1045.up)
+            mockRepool.assert_called()
+
+            mockRepool.reset_mock()
+
+            # Nothing should happen, already up
+            self.coordinator.resultUp(mockMonitor)
+            self.assertTrue(cp1045.up)
+            mockRepool.assert_not_called()
+
+            cp1045.enabled = False
+            cp1045.up = False
+            mockRepool.reset_mock()
+
+            # Disabled server, shouldn't get repooled
+            self.coordinator.resultUp(mockMonitor)
+            self.assertTrue(cp1045.up)
+            mockRepool.assert_not_called()
+
+    def testDepool(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+        self.setServers(servers, pooled=True)
+        self.assertTrue(self.coordinator.canDepool()) # threshold is mocked at .5
+
+        # 2/2 servers up, can depool
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        cp1045.up = False
+        self.coordinator.depool(cp1045)
+        self.coordinator.lvsservice.removeServer.assert_called_once_with(cp1045)
+        self.assertNotIn(cp1045, self.coordinator.pooledDownServers)
+
+        self.coordinator.lvsservice.reset_mock()
+
+        # 1/2 servers up, can't depool more
+        cp1046 = self.coordinator.servers['cp1046.eqiad.wmnet']
+        cp1046.up = False
+        self.assertFalse(self.coordinator.canDepool())
+        self.coordinator.depool(cp1046)
+        self.coordinator.lvsservice.removeServer.assert_not_called()
+        self.assertIn(cp1046, self.coordinator.pooledDownServers)
+
+    def testRepool(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+        self.setServers(servers, pooled=False, ready=True)
+
+        # The standard case
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        self.coordinator.repool(cp1045)
+        self.coordinator.lvsservice.addServer.assert_called_with(cp1045)
+
+        # The previously-pooled-but-down case
+        self.setServers(servers, pooled=True, ready=True)
+        self.coordinator.pooledDownServers = set(self.coordinator.servers.itervalues())
+        self.coordinator.repool(cp1045)
+        self.assertNotIn(cp1045, self.coordinator.pooledDownServers)
+
+        # With depool threshold at 0.5, cp1046 should also have been repooled
+        self.assertEqual(self.coordinator.lvsservice.getDepoolThreshold(), 0.5)
+        self.assertFalse(self.coordinator.pooledDownServers)
+        self.assertTrue(self.coordinator.servers['cp1046.eqiad.wmnet'].pooled)
+
+    def test2serversCanDepool(self):
         servers = {
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
@@ -70,8 +252,7 @@ class CoordinatorTestCase(PyBalTestCase):
         # cannot depool.
         self.assertFalse(self.coordinator.canDepool())
 
-    @mock.patch('pybal.server.Server.initialize')
-    def test4serversCanDepool(self, mock_initialize):
+    def test4serversCanDepool(self):
         servers = {
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
