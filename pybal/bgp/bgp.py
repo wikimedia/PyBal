@@ -649,13 +649,19 @@ class FSM(object):
     def connectRetryTimeEvent(self):
         """Called when the ConnectRetryTimer expires. (event 9)"""
 
-        if self.state in (ST_CONNECT, ST_ACTIVE):
+        if self.state == ST_CONNECT:
             # State Connect, event 9
             self._closeConnection()
             self.connectRetryTimer.reset(self.connectRetryTime)
             self.delayOpenTimer.cancel()
             # Initiate TCP connection
             if self.bgpPeering: self.bgpPeering.connectRetryEvent(self.protocol)
+        elif self.state == ST_ACTIVE:
+            # State Active, event 9
+            self.connectRetryTimer.reset(self.connectRetryTime)
+            # Initiate TCP connection
+            if self.bgpPeering: self.bgpPeering.connectRetryEvent(self.protocol)
+            self.state = ST_CONNECT
         elif self.state != ST_IDLE:
             # State OpenSent, OpenConfirm, Established, event 12
             self.protocol.sendNotification(ERR_FSM, 0)

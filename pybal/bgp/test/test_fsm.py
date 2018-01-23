@@ -113,7 +113,9 @@ class FSMDefinitionTestCase(unittest.TestCase):
 
     def assertState(self, state):
         """Asserts that the FSM is in the desired state"""
-        self.assertEqual(self.fsm.state, state)
+        self.assertEqual(self.fsm.state, state,
+            "State is {} instead of expected {}".format(
+                bgp.stateDescr[self.fsm.state], bgp.stateDescr[state]))
 
     def assertTimerInactive(self, timer):
         """Asserts that the passed (mocked) timer is set to 0."""
@@ -499,7 +501,6 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.assertTimerInactive(self.fsm.connectRetryTimer)
         self.assertState(ST_IDLE)
 
-    @unittest.skip("Bug: state should change to CONNECT")
     @edge(ST_ACTIVE, 9)
     def test_Active_event_9(self, event=9):
         with self.eventUnderTest():
