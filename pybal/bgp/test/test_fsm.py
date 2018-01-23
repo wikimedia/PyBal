@@ -306,8 +306,8 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self.fsm.bgpPeering.connectRetryEvent.assert_called()
         self.assertState(ST_CONNECT)
 
-    @edge(ST_CONNECT, 10, 11)
-    def test_Connect_event_10_11(self, event):
+    @edge(ST_CONNECT, 10, 11, 13)
+    def test_Connect_event_10_11_13(self, event):
         self._test_Connect_to_IDLE(eventMethods[event])
 
     @edge(ST_CONNECT, 12)
@@ -318,11 +318,6 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self.fsm.protocol.sendOpen.assert_called()
         self.assertTimerReset(self.fsm.holdTimer, self.fsm.largeHoldTime)
         self.assertState(ST_OPENSENT)
-
-    @unittest.skip("Bug: event 13")
-    @edge(ST_CONNECT, 13)
-    def test_Connect_event_13(self, event=13):
-        self._testConnect_to_IDLE(eventMethods[event])
 
     @edge(ST_CONNECT, 16, 17)
     def test_Connect_event_16_17_delayOpen_True(self, event):
@@ -514,12 +509,8 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.fsm.bgpPeering.connectRetryEvent.assert_called()
         self.assertState(ST_CONNECT)
 
-    @edge(ST_ACTIVE, 10)
-    def test_Active_event_10(self, event=10):
-        self._test_Active_to_IDLE(eventMethods[event])
-
-    @edge(ST_ACTIVE, 11)
-    def test_Active_event_11(self, event=11):
+    @edge(ST_ACTIVE, 10, 11, 13)
+    def test_Active_event_10_11_13(self, event):
         self._test_Active_to_IDLE(eventMethods[event])
 
     @unittest.skip("Bug: FSM.delayOpen should call BGP.sendOpen")
@@ -534,11 +525,6 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.fsm.protocol.sendOpen.assert_called() # Bug
         self.assertTimerReset(self.fsm.holdTimer, self.fsm.largeHoldTime)
         self.assertState(ST_OPENSENT)
-
-    @unittest.skip("Bug: event 13 does not handle state ACTIVE")
-    @edge(ST_ACTIVE, 13)
-    def test_Active_event_13(self, event=13):
-        self._test_Active_to_IDLE(eventMethods[event])
 
     @edge(ST_ACTIVE, 17)
     def test_Active_event_17_delayOpen_true(self, event=17):
@@ -702,8 +688,8 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.assertEqual(self.fsm.connectRetryCounter, 0)
         self.assertState(ST_IDLE)
 
-    @edge(ST_OPENSENT, 9)
-    def test_OpenSent_event_9(self, event=9):
+    @edge(ST_OPENSENT, 9, 13)
+    def test_OpenSent_event_9_13(self, event):
         self._testFSM_error(eventMethods[event])
 
     @unittest.skip("holdTimeEvent increases connectRetryCounter twice")
@@ -725,11 +711,6 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
     @edge(ST_OPENSENT, 12)
     def test_OpenSent_event_12(self, event=12):
         self.fsm.delayOpen = True
-        self._testFSM_error(eventMethods[event])
-
-    @unittest.skip("Bug: event 13 does not handle state OpenSent")
-    @edge(ST_OPENSENT, 13)
-    def test_OpenSent_event_13(self, event=13):
         self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENSENT, 17)
@@ -859,8 +840,8 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
         self.assertEqual(self.fsm.connectRetryCounter, 0)
         self.assertState(ST_IDLE)
 
-    @edge(ST_OPENCONFIRM, 9)
-    def test_OpenConfirm_event_9(self, event=9):
+    @edge(ST_OPENCONFIRM, 9, 13)
+    def test_OpenConfirm_event_9_13(self, event):
         self._testFSM_error(eventMethods[event])
 
     @unittest.skip("holdTimeEvent increases connectRetryCounter twice")
@@ -885,11 +866,6 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
     @edge(ST_OPENCONFIRM, 12)
     def test_OpenConfirm_event_12(self, event=12):
         self.fsm.delayOpen = True
-        self._testFSM_error(eventMethods[event])
-
-    @unittest.skip("Bug: event 13 does not handle state OpenSent")
-    @edge(ST_OPENCONFIRM, 13)
-    def test_OpenConfirm_event_13(self, event=13):
         self._testFSM_error(eventMethods[event])
 
     @edge(ST_OPENCONFIRM, 17)
@@ -1007,8 +983,8 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
         self.assertEqual(self.fsm.connectRetryCounter, 0)
         self.assertState(ST_IDLE)
 
-    @edge(ST_ESTABLISHED, 9)
-    def test_Established_event_9(self, event=9):
+    @edge(ST_ESTABLISHED, 9, 13)
+    def test_Established_event_9_13(self, event):
         self._testFSM_error(eventMethods[event])
 
     @unittest.skip("holdTimeEvent increases connectRetryCounter twice")
@@ -1043,11 +1019,6 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
     @edge(ST_ESTABLISHED, 12)
     def test_Established_event_12(self, event=12):
         self.fsm.delayOpen = True
-        self._testFSM_error(eventMethods[event])
-
-    @unittest.skip("Bug: event 13 does not handle state Established")
-    @edge(ST_ESTABLISHED, 13)
-    def test_Established_event_13(self, event=13):
         self._testFSM_error(eventMethods[event])
 
     def _subtest_Established_to_Idle(self):

@@ -651,6 +651,14 @@ class FSM(object):
 
         if self.state == ST_IDLE:
             if self.bgpPeering: self.bgpPeering.automaticStart(idleHold=False)
+        else:
+            fsmError = False
+            if self.state in (ST_OPENSENT, ST_OPENCONFIRM, ST_ESTABLISHED):
+                fsmError = True
+                self.protocol.sendNotification(ERR_FSM, 0)
+            self._errorClose()
+            if fsmError:
+                raise NotificationSent(self.protocol, ERR_FSM, 0)
 
     def updateSent(self):
         """Called by the protocol instance when it just sent an Update message."""
