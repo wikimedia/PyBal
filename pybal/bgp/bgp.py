@@ -611,7 +611,7 @@ class FSM(object):
             self.connectRetryTimer.cancel()
             self.delayOpenTimer.cancel()
             if self.bgpPeering: self.bgpPeering.completeInit(self.protocol)
-            self.sendOpen()
+            self.protocol.sendOpen()
             self.holdTimer.reset(self.largeHoldTime)
             self.state = ST_OPENSENT
         elif self.state != ST_IDLE:

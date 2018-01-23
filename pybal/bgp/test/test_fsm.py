@@ -514,7 +514,6 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
     def test_Active_event_10_11_13(self, event):
         self._test_Active_to_IDLE(eventMethods[event])
 
-    @unittest.skip("Bug: FSM.delayOpen should call BGP.sendOpen")
     @edge(ST_ACTIVE, 12)
     def test_Active_event_12(self, event=12):
         self.fsm.delayOpen = True
