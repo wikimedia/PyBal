@@ -106,10 +106,16 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
     protocol = EtcdClient
     scheme = 'https'
     timeout = 0
+    reconnectTimeout = 1
     followRedirect = False
     afterFoundGet = False
 
-    def __init__(self, coordinator, configUrl):
+    def __init__(self, coordinator, configUrl, mock_reactor=None):
+        if mock_reactor is None:
+            self.reactor = reactor
+        else:
+            self.reactor = mock_reactor
+
         self.coordinator = coordinator
         self.configUrl = configUrl
         self.host, self.port, self.key = self.parseConfigUrl(configUrl)
@@ -118,8 +124,8 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
 
     def startObserving(self):
         """Start (or re-start) watching etcd for changes."""
-        reactor.connectSSL(self.host, self.port, self,
-                           ssl.ClientContextFactory())
+        self.reactor.connectSSL(self.host, self.port, self,
+                                ssl.ClientContextFactory())
 
     def parseConfigUrl(self, configUrl):
         parsed = urlparse(configUrl)
@@ -134,10 +140,15 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
         path = '%s?%s' % (path, urllib.urlencode(params))
         return path
 
+    def reconnect(self, connector):
+        log.info("reconnecting to etcd in %d seconds" % self.reconnectTimeout,
+                 system="config-etcd")
+        self.reactor.callLater(self.reconnectTimeout, connector.connect)
+
     def clientConnectionFailed(self, connector, reason):
         log.error("client connection failed: reason=%s" % reason, system="config-etcd")
         self.waitIndex = None
-        connector.connect()
+        self.reconnect(connector)
 
     def clientConnectionLost(self, connector, reason):
         r = reason.trap(ConnectionDone)
@@ -146,7 +157,7 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
         else:
             log.error("client connection lost: reason=%s" % reason, system="config-etcd")
             self.waitIndex = None
-        connector.connect()
+        self.reconnect(connector)
 
     def getMaxModifiedIndex(self, root):
         root = root.get('node', root)
