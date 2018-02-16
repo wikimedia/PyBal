@@ -12,6 +12,9 @@ import json
 import mock
 import urlparse
 
+from twisted.internet import task
+from twisted.internet.error import ConnectionDone
+
 import pybal
 import pybal.config
 import pybal.etcd
@@ -21,11 +24,13 @@ from .fixtures import PyBalTestCase
 class EtcdConfigurationObserverTestCase(PyBalTestCase):
     def setUp(self):
         super(EtcdConfigurationObserverTestCase, self).setUp()
+        # Mocked reactor to test the passage of time
+        self.reactor = task.Clock()
         self.observer = self.getObserver()
 
     def getObserver(self, url='etcd://example.com/config/text'):
         return pybal.etcd.EtcdConfigurationObserver(
-            self.coordinator, url)
+            self.coordinator, url, self.reactor)
 
     def testParseConfigUrl(self):
         """Test initialization"""
@@ -44,6 +49,45 @@ class EtcdConfigurationObserverTestCase(PyBalTestCase):
         self.assertDictEqual(dict(urlparse.parse_qsl(url.query)),
                              {'wait': 'true', 'waitIndex': '4',
                               'recursive': 'true' })
+
+    def testClientConnectionFailed(self):
+        connector = mock.MagicMock()
+        connector.connect = mock.MagicMock()
+        reason = mock.MagicMock()
+
+        self.observer.clientConnectionFailed(connector, reason)
+
+        # Ensure that after reconnectTimeout connector.connect gets called by
+        # EtcdConfigurationObserver.reconnect
+        self.reactor.advance(self.observer.reconnectTimeout)
+        connector.connect.assert_called()
+
+    def __testClientConnection(self, reason, expectedWaitIndex):
+        connector = mock.MagicMock()
+        connector.connect = mock.MagicMock()
+
+        # Let's say waitIndex is 1
+        self.observer.waitIndex = 1
+
+        # Lose connection with the given reason
+        self.observer.clientConnectionLost(connector, reason)
+
+        # Ensure that connector.connect gets called after reconnectTimeout
+        self.reactor.advance(self.observer.reconnectTimeout)
+        connector.connect.assert_called()
+
+        # waitIndex should be None if the connection has been lost in a unclean
+        # fashion, unchanged otherwise
+        self.assertEquals(expectedWaitIndex, self.observer.waitIndex)
+
+    def testClientConnectionLostCleanly(self):
+        reason = mock.MagicMock()
+        reason.trap = lambda x: ConnectionDone
+        self.__testClientConnection(reason, 1)
+
+    def testClientConnectionLost(self):
+        reason = mock.MagicMock()
+        self.__testClientConnection(reason, None)
 
     def testGetMaxModifiedIndex(self):
         nodes = {
