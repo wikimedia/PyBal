@@ -1,3 +1,10 @@
+pybal (1.14.4) jessie-wikimedia; urgency=medium
+
+  * etcd: Introduce reconnectTimeout (Bug: T169765)
+    c917f59f4c37c7b89f15d0fd8b375de028d4a90b
+
+ -- Emanuele Rocca <ema@wikimedia.org>  Wed, 21 Feb 2018 12:40:43 +0100
+
 pybal (1.14.3) jessie-wikimedia; urgency=medium
 
   * Use up-and-enabled servers in can-depool logic (Bug: T184715)
