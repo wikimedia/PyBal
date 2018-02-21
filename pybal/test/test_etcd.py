@@ -25,12 +25,16 @@ class EtcdConfigurationObserverTestCase(PyBalTestCase):
     def setUp(self):
         super(EtcdConfigurationObserverTestCase, self).setUp()
         # Mocked reactor to test the passage of time
-        self.reactor = task.Clock()
+        self.reactor_patcher = mock.patch('pybal.etcd.reactor', new_callable=task.Clock)
+        self.reactor = self.reactor_patcher.start()
         self.observer = self.getObserver()
+
+    def tearDown(self):
+        self.reactor_patcher.stop()
 
     def getObserver(self, url='etcd://example.com/config/text'):
         return pybal.etcd.EtcdConfigurationObserver(
-            self.coordinator, url, self.reactor)
+            self.coordinator, url)
 
     def testParseConfigUrl(self):
         """Test initialization"""

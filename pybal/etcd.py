@@ -110,12 +110,8 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
     followRedirect = False
     afterFoundGet = False
 
-    def __init__(self, coordinator, configUrl, mock_reactor=None):
-        if mock_reactor is None:
-            self.reactor = reactor
-        else:
-            self.reactor = mock_reactor
-
+    def __init__(self, coordinator, configUrl):
+        self.reactor = reactor
         self.coordinator = coordinator
         self.configUrl = configUrl
         self.host, self.port, self.key = self.parseConfigUrl(configUrl)
