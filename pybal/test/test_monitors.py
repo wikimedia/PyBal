@@ -11,6 +11,7 @@ import pybal.util
 from pybal.monitors.idleconnection import IdleConnectionMonitoringProtocol
 from pybal.monitors.dnsquery import DNSQueryMonitoringProtocol
 from pybal.monitors.runcommand import RunCommandMonitoringProtocol
+from pybal.monitors.udp import UDPMonitoringProtocol
 
 from twisted.internet import defer
 from twisted.internet.reactor import getDelayedCalls
@@ -220,3 +221,41 @@ class RunCommandMonitoringProtocolTestCase(PyBalTestCase):
         self.monitor = RunCommandMonitoringProtocol(
             self.coordinator, self.server, self.config)
         self.assertEquals(self.monitor.arguments, [""])
+
+
+class UDPMonitoringProtocolTestCase(PyBalTestCase):
+    def setUp(self):
+        super(UDPMonitoringProtocolTestCase, self).setUp()
+        self.config = pybal.util.ConfigDict()
+        self.monitor = UDPMonitoringProtocol(
+            self.coordinator, self.server, self.config)
+
+    def tearDown(self):
+        self.monitor.stop()
+
+    def testInit(self):
+        self.assertEquals(self.monitor.interval,
+                          UDPMonitoringProtocol.INTV_CHECK)
+        self.assertEquals(self.monitor.icmp_timeout,
+                          UDPMonitoringProtocol.ICMP_TIMEOUT)
+
+        config = pybal.util.ConfigDict()
+        config['udp.interval'] = 5
+        config['udp.icmp-timeout'] = 2
+        monitor = UDPMonitoringProtocol(
+            self.coordinator, self.server, config)
+        self.assertEquals(monitor.interval, 5)
+        self.assertEquals(monitor.icmp_timeout, 2)
+
+    def testRun(self):
+        self.assertEquals(self.monitor.last_down_timestamp, 0)
+        self.monitor.run()
+        self.assertEquals(self.monitor.loop.running, True)
+        self.assertTrue(self.monitor.up)
+
+    def testConnectionRefused(self):
+        monitor = UDPMonitoringProtocol(
+            self.coordinator, self.server, self.config)
+        monitor.connectionRefused()
+        self.assertFalse(monitor.up)
+        self.assertNotEquals(monitor.last_down_timestamp, 0)
