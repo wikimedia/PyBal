@@ -307,3 +307,116 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
                                     (2, 1): set([ adv_v6 ]) }
 
         self.peering.setAdvertisements(set())
+
+
+class BGPOpenParserTestCase(unittest.TestCase):
+
+    MSG_OPEN = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                b'\xff\xff\xff\xff\xff\xff\x00\x2d\x01\x04\xff\x14\x00\xb4\x04\x04' +
+                b'\x04\x04\x10\x02\x06\x01\x04\x00\x01\x00\x01\x02\x02\x80\x00\x02' +
+                b'\x02\x02\x00')
+    MSG_OPEN_VERSION = 4
+    MSG_OPEN_PEER_ASN = 65300
+    MSG_OPEN_HOLD_TIME = 180
+    MSG_OPEN_BGP_ID = ip.IPv4IP('4.4.4.4').ipToInt()
+    def setUp(self):
+        self.bgp = bgp.BGP()
+        self.bgp.bgpPeering = bgp.BGPPeering(myASN=65300, peerAddr='4.4.4.4')
+        self.bgp.openReceived = mock.MagicMock()
+
+    def testParseOpen(self):
+        self.bgp.receiveBuffer = BGPOpenParserTestCase.MSG_OPEN
+        self.assertTrue(self.bgp.parseBuffer())
+        self.bgp.openReceived.assert_called_with(BGPOpenParserTestCase.MSG_OPEN_VERSION,
+                                                 BGPOpenParserTestCase.MSG_OPEN_PEER_ASN,
+                                                 BGPOpenParserTestCase.MSG_OPEN_HOLD_TIME,
+                                                 BGPOpenParserTestCase.MSG_OPEN_BGP_ID)
+
+
+class BGPKeepAliveParserTestCase(unittest.TestCase):
+    MSG_KEEPALIVE = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                     b'\xff\xff\xff\xff\xff\xff\x00\x13\x04')
+    MSG_BOGUS_KEEPALIVE = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                           b'\xff\xff\xff\xff\xff\xfe\x00\x13\x04')
+    def setUp(self):
+        self.bgp = bgp.BGP()
+        self.bgp.keepAliveReceived = mock.MagicMock()
+        self.bgp.fsm = mock.MagicMock()
+        self.bgp.fsm.headerError = mock.MagicMock()
+
+    def testParseKeepAlive(self):
+        self.bgp.receiveBuffer = BGPKeepAliveParserTestCase.MSG_KEEPALIVE
+        self.assertTrue(self.bgp.parseBuffer())
+        self.bgp.keepAliveReceived.assert_called()
+
+    def testParseBogusKeepAlive(self):
+        self.bgp.receiveBuffer = BGPKeepAliveParserTestCase.MSG_BOGUS_KEEPALIVE
+        self.assertTrue(self.bgp.parseBuffer())
+        self.bgp.fsm.headerError.assert_called_with(bgp.ERR_MSG_HDR_CONN_NOT_SYNC)
+
+
+class BGPUpdateParserTestCase(unittest.TestCase):
+    MSG_UPDATE = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                  b'\xff\xff\xff\xff\xff\xff\x00\x3f\x02\x00\x00\x00\x1c\x40\x01\x01' +
+                  b'\x00\x40\x02\x00\x40\x03\x04\x03\x03\x03\x03\x80\x04\x04\x00\x00' +
+                  b'\x00\x00\x40\x05\x04\x00\x00\x00\x64\x18\x0a\x1e\x03\x18\x0a\x1e' +
+                  b'\x02\x18\x0a\x1e\x01')
+
+    MSG_UPDATE_WITHDRAWN_PREFIXES = []
+    MSG_UPDATE_ATTRIBUTES = [
+        bgp.BaseOriginAttribute(value='\x00').tuple(),
+        (64, 2, ''),  #  bgp.BaseASPathAttribute(value='').tuple()
+        (64, 3, '\x03\x03\x03\x03'),  # bgp.NextHopAttribute(value='3.3.3.3').tuple(),
+        bgp.BaseMEDAttribute(value='\x00\x00\x00\x00').tuple(),
+        (64, 5, '\x00\x00\x00d') # bgp.BaseLocalPrefAttribute(value=100).tuple()
+    ]
+    MSG_UPDATE_NLRI = [bgp.IPPrefix('10.30.3.0/24'), bgp.IPPrefix('10.30.2.0/24'),
+                       bgp.IPPrefix('10.30.1.0/24')]
+
+    def setUp(self):
+        self.bgp = bgp.BGP()
+        self.bgp.updateReceived = mock.MagicMock()
+
+    def testParseUpdate(self):
+        self.bgp.receiveBuffer = BGPUpdateParserTestCase.MSG_UPDATE
+        self.assertTrue(self.bgp.parseBuffer())
+        self.bgp.updateReceived.assert_called_with(
+            BGPUpdateParserTestCase.MSG_UPDATE_WITHDRAWN_PREFIXES,
+            BGPUpdateParserTestCase.MSG_UPDATE_ATTRIBUTES,
+            BGPUpdateParserTestCase.MSG_UPDATE_NLRI)
+
+
+class BGPNotificationParserTestCase(unittest.TestCase):
+    MSG_NOTIFICATION = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                        b'\xff\xff\xff\xff\xff\xff\x00\x17\x03\x02\x02\xfe\xb0')
+    MSG_NOTIFICATION_MAJOR_ERROR = bgp.ERR_MSG_OPEN
+    MSG_NOTIFICATION_MINOR_ERROR = bgp.ERR_MSG_OPEN_BAD_PEER_AS
+    MSG_NOTIFICATION_ERROR_VALUE = struct.pack('!H', 65200)
+
+    def setUp(self):
+        self.bgp = bgp.BGP()
+        self.bgp.notificationReceived = mock.MagicMock()
+
+    def testParseNotification(self):
+        self.bgp.receiveBuffer = BGPNotificationParserTestCase.MSG_NOTIFICATION
+        self.assertTrue(self.bgp.parseBuffer())
+        self.bgp.notificationReceived.assert_called_with(
+            BGPNotificationParserTestCase.MSG_NOTIFICATION_MAJOR_ERROR,
+            BGPNotificationParserTestCase.MSG_NOTIFICATION_MINOR_ERROR,
+            BGPNotificationParserTestCase.MSG_NOTIFICATION_ERROR_VALUE
+        )
+
+
+class BGPNonSupportedMsgParserTestCase(unittest.TestCase):
+    MSG_ROUTE_REFRESH = (b'\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff' +
+                         b'\xff\xff\xff\xff\xff\xff\x00\x17\x05\x00\x01\x00\x01')
+
+    def setUp(self):
+        self.bgp = bgp.BGP()
+        self.bgp.fsm = mock.MagicMock()
+        self.bgp.fsm.headerError = mock.MagicMock()
+
+    def testParseRouteRefresh(self):
+        self.bgp.receiveBuffer = BGPNonSupportedMsgParserTestCase.MSG_ROUTE_REFRESH
+        self.assertTrue(self.bgp.parseBuffer())
+        self.bgp.fsm.headerError.assert_called_with(bgp.ERR_MSG_HDR_BAD_MSG_TYPE, chr(5))
