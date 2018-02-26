@@ -24,6 +24,7 @@ Supported features:
 """
 
 # System imports
+import logging
 import struct
 
 # Zope imports
@@ -36,7 +37,7 @@ from twisted.internet import reactor, protocol, base, interfaces, error, defer
 from ip import IPv4IP, IPv6IP, IPPrefix
 
 from pybal.metrics import Gauge
-from pybal.util import log
+from pybal.util import _log
 
 # Constants
 VERSION = 4
@@ -802,6 +803,7 @@ class Advertisement(object):
     def __repr__(self):
         return repr(self.__dict__)
 
+
 class FSM(object):
     class BGPTimer(object):
         """
@@ -891,10 +893,13 @@ class FSM(object):
 
         self.initial_idle_state = True
 
+    def log(self, msg, lvl=logging.DEBUG):
+        s = "bgp@{}".format(hex(id(self)))
+        _log(msg, lvl, s)
 
     def __setattr__(self, name, value):
         if name == 'state' and value != getattr(self, name):
-            log.info("State is now: %s" % stateDescr[value], system="bgp")
+            self.log("State is now: %s" % stateDescr[value], logging.INFO)
             self.__update_metrics(value)
         super(FSM, self).__setattr__(name, value)
 
@@ -1043,7 +1048,7 @@ class FSM(object):
 
         elif self.state == ST_OPENCONFIRM:
             # State OpenConfirm, events 19, 20
-            log.debug("Running collision detection", system="bgp")
+            self.log("Running collision detection")
 
             # Perform collision detection
             self.protocol.collisionDetect()
@@ -1168,7 +1173,7 @@ class FSM(object):
         (event 23)
         """
 
-        log.debug("Collided, closing", system="bgp")
+        self.log("Collided, closing")
 
         if self.state == ST_IDLE:
             return
@@ -1183,7 +1188,7 @@ class FSM(object):
 
         assert(self.delayOpen)
 
-        log.debug("Delay Open event", system="bgp")
+        self.log("Delay Open event")
 
         if self.state == ST_CONNECT:
             # State Connect, event 12
@@ -1430,6 +1435,7 @@ class BGPUpdateMessage(BGPMessage):
         self.nlriCount += added
         return added
 
+
 class BGP(protocol.Protocol):
     """Protocol class for BGP 4"""
 
@@ -1440,6 +1446,10 @@ class BGP(protocol.Protocol):
         self.disconnected = False
         self.receiveBuffer = ''
 
+    def log(self, msg, lvl=logging.DEBUG):
+        s = "bgp@{}".format(hex(id(self)))
+        _log(msg, lvl, s)
+
     def connectionMade(self):
         """
         Starts the initial negotiation of the protocol
@@ -1448,7 +1458,7 @@ class BGP(protocol.Protocol):
         # Set transport socket options
         self.transport.setTcpNoDelay(True)
 
-        log.debug("Connection established", system="bgp")
+        self.log("Connection established")
 
         # Set the local BGP id from the local IP address if it's not set
         if self.factory.bgpId is None:
@@ -1471,7 +1481,7 @@ class BGP(protocol.Protocol):
             self.factory.connectionClosed(self)
             return
 
-        log.info("Connection lost: %s" % reason.getErrorMessage(), system="bgp")
+        self.log("Connection lost: %s" % reason.getErrorMessage(), logging.INFO)
 
         try:
             self.fsm.connectionFailed()
@@ -1500,16 +1510,16 @@ class BGP(protocol.Protocol):
     def sendOpen(self):
         """Sends a BGP Open message to the peer"""
 
-        log.debug("Sending Open", system="bgp")
+        self.log("Sending Open")
 
         self.transport.write(self.constructOpen())
 
     def sendUpdate(self, withdrawnPrefixes, attributes, nlri):
         """Sends a BGP Update message to the peer"""
-        log.info("Sending Update", system="bgp")
-        log.info("Withdrawing: %s" % withdrawnPrefixes, system="bgp")
-        log.info("Attributes: %s" % attributes, system="bgp")
-        log.info("NLRI: %s" % nlri, system="bgp")
+        self.log("Sending Update", logging.INFO)
+        self.log("Withdrawing: %s" % withdrawnPrefixes, logging.INFO)
+        self.log("Attributes: %s" % attributes, logging.INFO)
+        self.log("NLRI: %s" % nlri, logging.INFO)
 
         self.transport.write(self.constructUpdate(withdrawnPrefixes, attributes, nlri))
         self.fsm.updateSent()
@@ -1529,7 +1539,7 @@ class BGP(protocol.Protocol):
         """
         Sends a bgpMessage
         """
-        log.debug("Sending BGP message: %s" % repr(bgpMessage), system="bgp")
+        self.log("Sending BGP message: %s" % repr(bgpMessage))
 
         # FIXME: Twisted on Python 2 doesn't support bytearrays
         self.transport.writeSequence(bytes(bgpMessage))
@@ -1719,7 +1729,7 @@ class BGP(protocol.Protocol):
 
         msg = "OPEN: version: %s ASN: %s hold time: %s id: %s" % (version,
             ASN, holdTime, bgpId)
-        log.info(msg, system="bgp")
+        self.log(msg, logging.INFO)
 
         self.peerId = bgpId
         self.bgpPeering.setPeerId(bgpId)
@@ -1753,8 +1763,9 @@ class BGP(protocol.Protocol):
     def notificationReceived(self, error, suberror, data=''):
         """Called when a BGP Notification message was received.
         """
-        log.info("NOTIFICATION: %s %s %s" % (
-            error, suberror, [ord(d) for d in data]))
+        self.log("NOTIFICATION: %s %s %s" % (
+            error, suberror, [ord(d) for d in data]),
+            logging.INFO)
 
         self.fsm.notificationReceived(error, suberror)
 
@@ -1768,8 +1779,8 @@ class BGP(protocol.Protocol):
         # Derived times
         self.fsm.keepAliveTime = self.fsm.holdTime / 3
 
-        log.info("Hold time: %s Keepalive time: %s" % (
-            self.fsm.holdTime, self.fsm.keepAliveTime), system="bgp")
+        self.log("Hold time: %s Keepalive time: %s" % (
+            self.fsm.holdTime, self.fsm.keepAliveTime), logging.INFO)
 
     def collisionDetect(self):
         """Performs collision detection. Outsources to factory class BGPPeering."""
@@ -1937,6 +1948,10 @@ class BGPFactory(protocol.Factory):
     myASN = None
     bgpId = None
 
+    def log(self, msg, lvl=logging.DEBUG):
+        s = "bgp@{}".format(hex(id(self)))
+        _log(msg, lvl, s)
+
     def buildProtocol(self, addr):
         """Builds a BGPProtocol instance"""
 
@@ -1949,7 +1964,8 @@ class BGPFactory(protocol.Factory):
         pass
 
     def clientConnectionLost(self, connector, reason):
-        log.info("Client connection lost: %s" % reason.getErrorMessage())
+        self.log("Client connection lost: %s" % reason.getErrorMessage(),
+                 logging.INFO)
 
 class BGPServerFactory(BGPFactory):
     """Class managing the server (listening) side of the BGP
@@ -1965,7 +1981,7 @@ class BGPServerFactory(BGPFactory):
         """Builds a BGPProtocol instance by finding an appropriate
         BGPPeering factory instance to hand over to.
         """
-        log.info("Connection received from %s" % addr.host, system="bgp")
+        self.log("Connection received from %s" % addr.host, logging.INFO)
 
         try:
             bgpPeering = self.peers[addr.host]
@@ -2020,8 +2036,9 @@ class BGPPeering(BGPFactory):
             else:
                 msg = 'gone'
                 metric_value = 0
-            log.info("BGP session %s for ASN %s peer %s" %
-                     (msg, self.myASN, self.peerAddr), system="bgp")
+            self.log("BGP session %s for ASN %s peer %s" %
+                     (msg, self.myASN, self.peerAddr),
+                     logging.INFO)
             self.metrics['bgp_session_established'].labels(**self.metric_labels).set(metric_value)
         #  old style class, super().__setattr__() doesn't work
         #  https://docs.python.org/2/reference/datamodel.html#customizing-attribute-access
@@ -2030,7 +2047,7 @@ class BGPPeering(BGPFactory):
     def buildProtocol(self, addr):
         """Builds a BGP protocol instance"""
 
-        log.debug("Building a new BGP protocol instance", system="bgp")
+        self.log("Building a new BGP protocol instance")
 
         p = BGPFactory.buildProtocol(self, addr)
         if p is not None:
@@ -2073,7 +2090,7 @@ class BGPPeering(BGPFactory):
     def clientConnectionFailed(self, connector, reason):
         """Called when the outgoing connection failed."""
 
-        log.info("Client connection failed: %s" % reason.getErrorMessage(), system="bgp")
+        self.log("Client connection failed: %s" % reason.getErrorMessage(), logging.INFO)
 
         # There is no protocol instance yet at this point.
         # Catch a possible NotificationException
@@ -2127,7 +2144,7 @@ class BGPPeering(BGPFactory):
         Called by FSM or Protocol when the BGP connection has been closed.
         """
 
-        log.debug("Connection closed", system="bgp")
+        self.log("Connection closed")
 
         if protocol is not None:
             # Connection succeeded previously, protocol exists
@@ -2180,7 +2197,7 @@ class BGPPeering(BGPFactory):
     def protocolError(self, failure):
         failure.trap(BGPException)
 
-        log.error("BGP exception %s" % failure, system="bgp")
+        self.log("BGP exception %s" % failure, logging.ERROR)
 
         e = failure.check(NotificationSent)
         try:
@@ -2188,9 +2205,9 @@ class BGPPeering(BGPFactory):
             failure.raiseException()
         except NotificationSent, e:
             if (e.error, e.suberror) == (ERR_MSG_UPDATE, ERR_MSG_UPDATE_ATTR_FLAGS):
-                log.error("exception on flags: %s" % BGP.parseEncodedAttributes(e.data), system="bgp")
+                self.log("exception on flags: %s" % BGP.parseEncodedAttributes(e.data), logging.ERROR)
             else:
-                log.error("%s %s %s" % (e.error, e.suberror, e.data), system="bgp")
+                self.log("%s %s %s" % (e.error, e.suberror, e.data), logging.ERROR)
 
         # FIXME: error handling
 
@@ -2258,7 +2275,7 @@ class BGPPeering(BGPFactory):
         BGPPeering or FSM, otherwise use manualStart() instead.
         """
 
-        log.info("(Re)connect to %s" % self.peerAddr, system="bgp")
+        self.report("(Re)connect to %s" % self.peerAddr, logging.INFO)
 
         if self.fsm.state != ST_ESTABLISHED:
             reactor.connectTCP(self.peerAddr, PORT, self)

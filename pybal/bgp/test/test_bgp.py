@@ -450,3 +450,22 @@ class BGPTimerTestCase(unittest.TestCase):
         self.assertFalse(timer.active())
         self.reactor.advance(2)
         called_function.assert_not_called()
+
+class BGPUniqueLoggingTestCase(unittest.TestCase):
+    def testLogImplementations(self):
+        classes = ['BGP', 'FSM', 'BGPFactory']
+        for c in classes:
+            logger_patch = mock.patch('pybal.bgp.bgp._log')
+            logger = logger_patch.start()
+
+            class_ = getattr(bgp, c)
+            instanceA = class_()
+            instanceB = class_()
+
+            instanceA.log("MSG")
+            instanceB.log("MSG")
+
+            self.assertNotEquals(logger.mock_calls[-1],
+                                 logger.mock_calls[-2])
+
+            logger_patch.stop()
