@@ -13,6 +13,7 @@ import unittest, mock, struct
 
 from twisted.test import proto_helpers
 from twisted.python.failure import Failure
+from twisted.internet import task
 from twisted.internet.error import ConnectionLost
 from twisted.internet.address import IPv4Address, IPv6Address
 
@@ -420,3 +421,32 @@ class BGPNonSupportedMsgParserTestCase(unittest.TestCase):
         self.bgp.receiveBuffer = BGPNonSupportedMsgParserTestCase.MSG_ROUTE_REFRESH
         self.assertTrue(self.bgp.parseBuffer())
         self.bgp.fsm.headerError.assert_called_with(bgp.ERR_MSG_HDR_BAD_MSG_TYPE, chr(5))
+
+
+class BGPTimerTestCase(unittest.TestCase):
+    def setUp(self):
+        self.reactor_patcher = mock.patch('pybal.bgp.bgp.reactor', new_callable=task.Clock)
+        self.reactor = self.reactor_patcher.start()
+
+    def tearDown(self):
+        self.reactor_patcher.stop()
+
+    def testTriggeredTimer(self):
+        called_function = mock.MagicMock()
+        timer = bgp.FSM.BGPTimer(called_function)
+        self.assertFalse(timer.active())
+        timer.reset(bgp.FSM.largeHoldTime)
+        self.assertTrue(timer.active())
+        self.reactor.advance(bgp.FSM.largeHoldTime)
+        called_function.assert_called_once()
+
+    def testCancelledTimer(self):
+        called_function = mock.MagicMock()
+        timer = bgp.FSM.BGPTimer(called_function)
+        timer.reset(bgp.FSM.largeHoldTime)
+        self.reactor.advance(bgp.FSM.largeHoldTime-1)
+        self.assertTrue(timer.active())
+        timer.cancel()
+        self.assertFalse(timer.active())
+        self.reactor.advance(2)
+        called_function.assert_not_called()
