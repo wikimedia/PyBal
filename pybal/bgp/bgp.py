@@ -35,6 +35,7 @@ from twisted.internet import reactor, protocol, base, interfaces, error, defer
 
 from ip import IPv4IP, IPv6IP, IPPrefix
 
+from pybal.metrics import Gauge
 from pybal.util import log
 
 # Constants
@@ -843,6 +844,19 @@ class FSM(object):
     largeHoldTime = 4*60
     sendNotificationWithoutOpen = True    # No bullshit
 
+    metric_labelnames = {'asn', 'state', 'local_peer', 'remote_peer', 'side'}
+    metric_keywords = {
+        'labelnames': metric_labelnames,
+        'namespace': 'pybal',
+        'subsystem': 'bgp'
+    }
+
+    metrics = {
+        'bgp_session_state': Gauge('session_state',
+                                   'Number of sessions in the specified state',
+                                   **metric_keywords)
+    }
+
     def __init__(self, bgpPeering=None, protocol=None):
         self.bgpPeering = bgpPeering
         self.protocol = protocol
@@ -865,10 +879,33 @@ class FSM(object):
         self.idleHoldTime = 30
         self.idleHoldTimer = FSM.BGPTimer(self.idleHoldTimeEvent)
 
+        self.metric_labels = {
+            'state': stateDescr[self.state],
+            'asn': None,
+            'local_peer': None,
+            'remote_peer': None,
+            'side': None
+        }
+        if self.bgpPeering:
+            self.metric_labels['asn'] = self.bgpPeering.myASN
+
+        self.initial_idle_state = True
+
+
     def __setattr__(self, name, value):
         if name == 'state' and value != getattr(self, name):
             log.info("State is now: %s" % stateDescr[value], system="bgp")
+            self.__update_metrics(value)
         super(FSM, self).__setattr__(name, value)
+
+    def __update_metrics(self, new_state):
+        if self.metric_labels['local_peer'] and self.metric_labels['remote_peer']:
+                if not self.initial_idle_state:
+                    self.metrics['bgp_session_state'].labels(**self.metric_labels).dec()
+                else:
+                    self.initial_idle_state = False
+                self.metric_labels['state'] = stateDescr[new_state]
+                self.metrics['bgp_session_state'].labels(**self.metric_labels).inc()
 
     def manualStart(self):
         """
@@ -916,6 +953,13 @@ class FSM(object):
         """Should be called when a TCP connection has successfully been
         established with the peer. (events 16, 17)
         """
+
+        self.metric_labels['local_peer'] = self.protocol.transport.getHost().host
+        self.metric_labels['remote_peer'] = self.protocol.transport.getPeer().host
+        if self.protocol.transport.getPeer().port == PORT:
+            self.metric_labels['side'] = 'active'
+        else:
+            self.metric_labels['side'] = 'passive'
 
         if self.state in (ST_CONNECT, ST_ACTIVE):
             # State Connect, Event 16 or 17
@@ -1937,6 +1981,19 @@ class BGPPeering(BGPFactory):
 
     implements(IBGPPeering, interfaces.IPushProducer)
 
+    metric_labelnames = {'asn', 'peer'}
+    metric_keywords = {
+        'labelnames': metric_labelnames,
+        'namespace': 'pybal',
+        'subsystem': 'bgp'
+    }
+
+    metrics = {
+        'bgp_session_established': Gauge('session_established',
+                                         'BGP session established',
+                                         **metric_keywords)
+    }
+
     def __init__(self, myASN=None, peerAddr=None):
         self.myASN = myASN
         self.peerAddr = peerAddr
@@ -1947,6 +2004,28 @@ class BGPPeering(BGPFactory):
         self.outConnections = []
         self.estabProtocol = None    # reference to the BGPProtocol instance in ESTAB state
         self.consumers = set()
+
+        self.metric_labels = {
+            'asn': self.myASN,
+            'peer': self.peerAddr
+        }
+        self.metrics = BGPPeering.metrics
+        self.metrics['bgp_session_established'].labels(**self.metric_labels).set(0)
+
+    def __setattr__(self, name, value):
+        if name == 'estabProtocol' and name in self.__dict__ and getattr(self, name) != value:
+            if value:
+                msg = 'established'
+                metric_value = 1
+            else:
+                msg = 'gone'
+                metric_value = 0
+            log.info("BGP session %s for ASN %s peer %s" %
+                     (msg, self.myASN, self.peerAddr), system="bgp")
+            self.metrics['bgp_session_established'].labels(**self.metric_labels).set(metric_value)
+        #  old style class, super().__setattr__() doesn't work
+        #  https://docs.python.org/2/reference/datamodel.html#customizing-attribute-access
+        self.__dict__[name] = value
 
     def buildProtocol(self, addr):
         """Builds a BGP protocol instance"""

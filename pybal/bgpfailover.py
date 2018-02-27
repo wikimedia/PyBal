@@ -12,6 +12,7 @@ from twisted.internet.error import CannotListenError
 
 from pybal.util import log
 from pybal.bgp import bgp
+from pybal.metrics import Gauge
 
 
 class BGPFailover:
@@ -21,15 +22,25 @@ class BGPFailover:
     peerings = {}
     ipServices = {}
 
+    metric_keywords = {
+        'namespace': 'pybal',
+        'subsystem': 'bgp'
+    }
+    metrics = {
+        'enabled': Gauge('enabled', 'BGP Enabled', **metric_keywords)
+    }
+
     def __init__(self, globalConfig):
         # Store globalconfig so setup() can check whether BGP is enabled.
         self.globalConfig = globalConfig
         if not globalConfig.getboolean('bgp', False):
+            self.metrics['enabled'].set(0)
             return
-
+        self.metrics['enabled'].set(1)
         self._parseConfig()
 
     def _parseConfig(self):
+        log.info("parsing BGP config", system="bgp")
         self.myASN = self.globalConfig.getint('bgp-local-asn')
         self.asPath = self.globalConfig.get('bgp-as-path', str(self.myASN))
         self.asPath = [int(asn) for asn in self.asPath.split()]
