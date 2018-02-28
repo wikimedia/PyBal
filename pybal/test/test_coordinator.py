@@ -279,3 +279,25 @@ class CoordinatorTestCase(PyBalTestCase):
         # By depooling, we would end up with 1/4 hosts serving traffic. We
         # cannot depool.
         self.assertFalse(self.coordinator.canDepool())
+
+    def testConfigServerRemoval(self):
+        """
+        Test whether servers that get deleted in configuration updates gets
+        removed by Pybal as well
+        """
+
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+            'cp1047.eqiad.wmnet': {},
+            'cp1048.eqiad.wmnet': {},
+        }
+        self.setServers(servers)    # calls onConfigUpdate
+
+        # Remove an arbitrary server from the configuration
+        removedHostname = servers.popitem()[0]
+        removedServer = self.coordinator.servers[removedHostname]
+        removedServer.destroy = mock.Mock()
+        self.setServers(servers)    # calls onConfigUpdate
+        removedServer.destroy.assert_called()
+        self.assertNotIn(removedServer, self.coordinator.servers)
