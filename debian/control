@@ -3,7 +3,7 @@ Section: net
 Priority: optional
 X-Python-Version: >= 2.7, << 2.8
 Maintainer: Mark Bergsma <mark@wikimedia.org>
-Uploaders: Faidon Liambotis <faidon@wikimedia.org>, Giuseppe Lavagetto <glavagetto@wikimedia.org>
+Uploaders: Faidon Liambotis <faidon@wikimedia.org>, Giuseppe Lavagetto <glavagetto@wikimedia.org>, Emanuele Rocca <ema@wikimedia.org>, Valentin Gutierrez <vgutierrez@wikimedia.org>
 Build-Depends: debhelper (>= 8), python-all, dh-python
 Standards-Version: 3.9.6
 Homepage: http://wikitech.wikimedia.org/view/Pybal
