@@ -1,3 +1,46 @@
+pybal (1.15.0) jessie-wikimedia; urgency=medium
+
+  * Add peer address information to BGP and FSM log lines (Bug: T188085)
+    8c2dce2d9c4400bbba137de2554adcbcfe6576f3
+
+  * Fix inconsistent label name (Bug: T188085)
+    c150bd3b8a5d472e951328f6337e99d5a936ac8a
+
+  * Fix log method invocation (Bug: T188085)
+    c58c7d283ac373911b5d8f5f69073956f19ffa4c
+
+  * Prefix log lines with the class name (Bug: T188085)
+    f3161bf1e86baf9a6b809c01bd218640023d25ee
+
+  * Improve naming of the new BGP metric names and labels (Bug: T188085)
+    4f787286bca01ce55817cd304b7087328cc09513
+
+  * Provide unique logging for BGP instances (Bug: T188085)
+    8181b72447138d3eeafd76dae515fb3833b3870e
+
+  * Provide an UDP monitor (Bug: T178151)
+    d3358e9d7e36cd9b7872bd94b83864ac271bd804
+
+  * Add a test case for removing previously existing servers
+    45ead115b03fcb098ea9f568b44e95e09be055fe
+
+  * Provide testing for FSM.BGPTimer (Bug: T188085)
+    97219b8f3fa9ed6147ca428fcc989be64018a564
+
+  * Add unit tests for Coordinator methods
+    9dc84cc5f9dc8b4a3a6a87ee3b9f0b4d5bec4937
+
+  * Provide BGP session state visibility for every ASN/peer (Bug: T188085)
+    bbe4f1f3f95eb457b88cd000a1a81170169d8523
+
+  * Provide test cases for BGP parsing (Bug: T188085)
+    b82f87a0ef390aee3f11524dfe5c881b3e693c9d
+
+  * etcd: Improve reactor mocking (Bug: T169765)
+    309f08ade5fcc9c701d34fb5c2b82ba6f029521e
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Mon, 05 Mar 2018 12:33:06 +0100
+
 pybal (1.14.4) jessie-wikimedia; urgency=medium
 
   * etcd: Introduce reconnectTimeout (Bug: T169765)
