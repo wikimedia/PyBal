@@ -119,7 +119,7 @@ class BGPFailover:
             if af[0] == (bgp.AFI_INET):
                 afAttrs[bgp.NextHopAttribute] = bgp.NextHopAttribute(self.nexthopIPv4)
             elif af[0] == (bgp.AFI_INET6):
-                afAttrs[bgp.MPReachNLRIAttribute] = bgp.MPReachNLRIAttribute((af, bgp.IPv6IP(self.nexthopIPv6), []))
+                afAttrs[bgp.MPReachNLRIAttribute] = bgp.MPReachNLRIAttribute((af[0], af[1], bgp.IPv6IP(self.nexthopIPv6), []))
             else:
                 raise ValueError("Unsupported address family {}".format(af))
 
