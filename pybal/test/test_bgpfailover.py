@@ -120,6 +120,9 @@ class TestBGPFailover(PyBalTestCase):
             {10, 20})
         # Test whether required attributes are present
         for ad in advertisements:
+            # ensure the generated attributes are hashable
+            for attribute in ad.attributes.itervalues():
+                self.assertIsInstance(hash(attribute), int)
             if ad.addressfamily[0] == bgp.AFI_INET:
                 self.assertTrue(set(ad.attributes.keys()).issuperset(
                     {bgp.OriginAttribute, bgp.ASPathAttribute, bgp.NextHopAttribute}))
