@@ -1,3 +1,10 @@
+pybal (1.15.1) jessie-wikimedia; urgency=medium
+
+  * Fix MPReachNLRIAttribute generation
+    77430defa915ad09310a109e0acc6aac0f557635
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Tue, 06 Mar 2018 17:58:44 +0100
+
 pybal (1.15.0) jessie-wikimedia; urgency=medium
 
   * Add peer address information to BGP and FSM log lines (Bug: T188085)
