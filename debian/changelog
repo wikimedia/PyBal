@@ -1,3 +1,10 @@
+pybal (1.15.2) jessie-wikimedia; urgency=medium
+
+  * Ensure per-service-MED is an integer
+    c22dae5bbffe6dd2faf1a254f3992f3dad59987c
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Thu, 08 Mar 2018 14:19:17 +0100
+
 pybal (1.15.1) jessie-wikimedia; urgency=medium
 
   * Fix MPReachNLRIAttribute generation
