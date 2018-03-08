@@ -195,7 +195,10 @@ class LVSService:
         # Per-service BGP is enabled by default but BGP can be disabled globally
         if configuration.getboolean('bgp', True):
             # Pass a per-service(-ip) MED if one is provided
-            med = configuration.get('bgp-med', None)
+            try:
+                med = configuration.getint('bgp-med')
+            except KeyError:
+                med = None
             # Associate service ip to this coordinator for BGP announcements
             BGPFailover.associateService(self.ip, self, med)
 

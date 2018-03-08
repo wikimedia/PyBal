@@ -6,6 +6,7 @@
   This module contains tests for `pybal.ipvs`.
 
 """
+import copy
 import pybal.ipvs
 import pybal.util
 import pybal.bgpfailover
@@ -106,6 +107,7 @@ class LVSServiceTestCase(PyBalTestCase):
         self.config['dryrun'] = 'true'
         self.service = ('tcp', '127.0.0.1', 80, 'rr', False)
         pybal.bgpfailover.BGPFailover.prefixes.clear()
+        pybal.bgpfailover.BGPFailover.ipServices.clear()
 
         def stubbedModifyState(cls, cmdList):
             cls.cmdList = cmdList
@@ -116,6 +118,8 @@ class LVSServiceTestCase(PyBalTestCase):
 
     def tearDown(self):
         pybal.ipvs.IPVSManager.modifyState = self.origModifyState
+        pybal.bgpfailover.BGPFailover.prefixes.clear()
+        pybal.bgpfailover.BGPFailover.ipServices.clear()
 
     def testConstructor(self):
         """Test `LVSService.__init__`."""
@@ -134,6 +138,15 @@ class LVSServiceTestCase(PyBalTestCase):
         self.config['bgp'] = 'true'
         pybal.ipvs.LVSService('http', self.service, self.config)
         self.assertItemsEqual(pybal.bgpfailover.BGPFailover.prefixes, {(1, 1)})
+
+        service = ('tcp', '::1', 443, 'rr', False)
+        config = copy.deepcopy(self.config)
+        config['bgp-med'] = '50'
+        pybal.ipvs.LVSService('per-service-MED', service, config)
+
+        for services in pybal.bgpfailover.BGPFailover.ipServices.itervalues():
+            for service in services:
+                self.assertIsInstance(service['med'], (type(None), int))
 
     def testService(self):
         """Test `LVSService.service`."""
