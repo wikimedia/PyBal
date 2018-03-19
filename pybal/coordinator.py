@@ -7,6 +7,7 @@ Copyright (C) 2006-2017 by Mark Bergsma <mark@nedworks.org>
 LVS Squid balancer/monitor for managing the Wikimedia Squid servers using LVS
 """
 
+import logging
 from twisted.internet import defer
 
 from pybal import config, util
@@ -209,6 +210,14 @@ class Coordinator:
 
         initList = []
 
+        # Let's keep pybal logging not too chatty by summarizing
+        # the number of added servers on new configurations (pybal start-up)
+        new_config = not self.servers
+        if new_config:
+            lvl = logging.DEBUG
+        else:
+            lvl = logging.INFO
+
         for hostName, hostConfig in config.items():
             if hostName in self.servers:
                 # Existing server. merge
@@ -229,14 +238,27 @@ class Coordinator:
                 self.lvsservice.initServer(server)
                 self.servers[hostName] = server
                 initList.append(server.initialize(self))
-                log.info(
-                    "New {status} server {host}, weight {weight}".format(**data),
-                    system=self.lvsservice.name
+                util._log(
+                          "New {status} server {host}, weight {weight}".format(**data),
+                          lvl,
+                          system=self.lvsservice.name
                 )
+
+        if new_config:
+            enabled_servers = len([server for server in self.servers.itervalues() if server.enabled is True])
+            disabled_servers = len(self.servers) - enabled_servers
+            util._log("Added {total} server(s): {enabled} enabled server(s) and {disabled} disabled server(s)".format(
+                        total=len(self.servers),
+                        enabled=enabled_servers,
+                        disabled=disabled_servers),
+                      logging.INFO,
+                      system=self.lvsservice.name
+            )
 
         # Remove old servers
         for hostName, server in delServers.iteritems():
-            log.info("{} Removing server {} (no longer found in new configuration)".format(self, hostName))
+            log.info("{} Removing server {} (no longer found in new configuration)".format(self, hostName),
+                     system=self.lvsservice.name)
             server.destroy()
             del self.servers[hostName]
 
