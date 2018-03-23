@@ -1,10 +1,12 @@
-pybal.egg-info
+*.egg-info/
+.DS_Store
 *.pyc
 .tox
 /.coverage
 _trial_temp
 build
 dist
+etc/
 .project
 .pydevproject
 .settings
