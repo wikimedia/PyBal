@@ -11,18 +11,18 @@ except ImportError:
     metrics_implementation = 'dummy'
 
 class DummyMetric(object):
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         pass
 
     def labels(self, **kwargs):
         return self
 
 class DummyCounter(DummyMetric):
-    def inc(self, **kwargs):
+    def inc(self, *args, **kwargs):
         pass
 
 class DummyGauge(DummyMetric):
-    def set(**kwargs):
+    def set(self, *args, **kwargs):
         pass
 
 if metrics_implementation == 'prometheus':
