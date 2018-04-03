@@ -1,3 +1,12 @@
+pybal (1.15.3) stretch-wikimedia; urgency=medium
+  * First Debian stretch release (Bug: T177961)
+  * Fix dummy metrics implementation (Bug: T190527)
+    49d297585edfb5fd9152cd6675904bd06656fbbd
+  * Bump python package version to 1.15
+    d2535baff3aae405232959db359cbcf46450a8e6
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Tue, 03 Apr 2018 15:49:49 +0200
+
 pybal (1.15.2) jessie-wikimedia; urgency=medium
 
   * Ensure per-service-MED is an integer
