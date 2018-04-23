@@ -69,9 +69,18 @@ class EtcdClient(HTTPClient):
     def handleResponse(self, response):
         log.debug("%s response: %s" % (self.status, response), system="config-etcd")
 
-        if self.status != '200':
-            err = error.Error(self.status, self.message, response)
-            self.factory.onFailure(failure.Failure(err))
+        if self.status == '400':
+            try:
+                etcd_err = json.loads(response)
+                if etcd_err['errorCode'] == 401:
+                    log.warn("Attempted to fetch an outdated index", system="config-etcd")
+                    self.waitIndex = None
+            except (ValueError, KeyError) as err:
+                log.warn("Unable to parse etcd error body: %s - %s" % (response, err), system="config-etcd")
+
+            self.handleErrorResponse(response)
+        elif self.status != '200':
+            self.handleErrorResponse(response)
         elif response is not None and len(response):
             try:
                 config = json.loads(response)
@@ -83,6 +92,10 @@ class EtcdClient(HTTPClient):
             log.warn("empty response from server", system="config-etcd")
 
         self.transport.loseConnection()
+
+    def handleErrorResponse(self, response):
+        err = error.Error(self.status, self.message, response)
+        self.factory.onFailure(failure.Failure(err))
 
     def handleHeader(self, key, val):
         if key == 'X-Etcd-Index':
