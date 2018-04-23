@@ -208,6 +208,9 @@ class EtcdClientTestCase(PyBalTestCase):
         # Test failures
         for status, resp in [
                 ('404', ''), # Bad status
+                ('400', '{"errorCode":401,"message":"The event in requested index is outdated and cleared","cause":"the requested history has been cleared [171395/161172]","index":172394}'),
+                ('400', '{Not Valid'),
+                ('400', '{"key": true}'),
                 ('200', '{Not Valid'), # non-json response
                 ('200', '{"key": true}') # invalid json
         ]:
@@ -229,3 +232,13 @@ class EtcdClientTestCase(PyBalTestCase):
         self.protocol.handleStatus('1.1', '200', 'OK')
         self.protocol.handleResponse(resp)
         self.protocol.factory.onUpdate.assert_called_with(json.loads(resp), 0)
+
+    def testHandleEtcd401Response(self):
+        self.protocol.waitIndex = 161172
+        self.protocol.handleStatus('1.1', '400', 'OK')
+        self.protocol.handleResponse('{"errorCode":401,"message":"The event in requested index is outdated and cleared","cause":"the requested history has been cleared [171395/161172]","index":172394}')
+        self.assertIsNone(self.protocol.waitIndex)
+        self.assertTrue(self.protocol.factory.onFailure.called)
+        self.assertTrue(self.protocol.transport.loseConnection.called)
+        self.protocol.factory.onFailure.reset_mock()
+        self.protocol.transport.loseConnection.reset_mock()
