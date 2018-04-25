@@ -9,6 +9,8 @@
 
 import pybal.util
 import pybal.monitor
+from pybal.monitors.__skeleton__ import SkeletonMonitoringProtocol
+from pybal.monitors.proxyfetch import ProxyFetchMonitoringProtocol
 from pybal.monitors.idleconnection import IdleConnectionMonitoringProtocol
 from pybal.monitors.dnsquery import DNSQueryMonitoringProtocol
 from pybal.monitors.runcommand import RunCommandMonitoringProtocol
@@ -54,6 +56,20 @@ class BaseMonitoringProtocolTestCase(PyBalTestCase):
         self.monitor.stop()
         self.assertFalse(self.monitor.active)
 
+
+class SkeletonMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
+    """Test case for `pybal.monitors.SkeletonMonitoringProtocol`."""
+
+    monitorClass = SkeletonMonitoringProtocol
+
+class ProxyFetchMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
+    """Test case for `pybal.monitors.ProxyFetchMonitoringProtocol`."""
+
+    monitorClass = ProxyFetchMonitoringProtocol
+
+    def setUp(self):
+        self.config['proxyfetch.url'] = '["http://en.wikipedia.org/test.php"]'
+        super(ProxyFetchMonitoringProtocolTestCase, self).setUp()
 
 class IdleConnectionMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.IdleConnectionMonitoringProtocol`."""
