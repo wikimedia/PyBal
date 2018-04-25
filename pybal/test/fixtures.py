@@ -28,6 +28,7 @@ class ServerStub(object):
             (self.ip6_addresses if ':' in ip else self.ip4_addresses).add(ip)
         self.up = False
         self.pool = False
+        self.is_pooled = False  # Testing only
 
     def textStatus(self):
         return '...'
@@ -79,9 +80,11 @@ class StubLVSService(object):
         self.servers = newServers
 
     def addServer(self, server):
+        # server.is_pooled only exists in ServerStub for testing
         server.is_pooled = True
 
     def removeServer(self, server):
+        # server.is_pooled only exists in ServerStub for testing
         server.is_pooled = False
 
 

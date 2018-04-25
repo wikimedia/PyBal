@@ -55,12 +55,8 @@ class Server:
         # if depool-threshold allows
         self.up = False
         # .pool is managed by Coordinator, indicating the immediate intention
-        # to pool or depool this server. is_pooled should follow this closely.
+        # to pool or depool this server.
         self.pool = False
-        # .is_pooled is set by LVSService, immediately after this server has
-        # been pooled or depooled. It represents the actual state of this server
-        # in IPVS as far as PyBal is aware
-        self.is_pooled = False
         self.enabled = True
         self.ready = False
         self.modified = None

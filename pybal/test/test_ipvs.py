@@ -183,16 +183,12 @@ class LVSServiceTestCase(PyBalTestCase):
             ['-a -t 127.0.0.1:80 -r %s' % s for s in 'cde'] +
             ['-d -t 127.0.0.1:80 -r %s' % s for s in 'abc']
         )
-        for server in (old_servers | new_servers):
-            self.assertEquals(server.is_pooled, server in new_servers)
-            self.assertEquals(server.is_pooled, server.pool)
 
     def testAddServer(self):
         """Test `LVSService.addServer`."""
         lvs_service = pybal.ipvs.LVSService('http', self.service, self.config)
         self.server.pool = True
         lvs_service.addServer(self.server)
-        self.assertTrue(self.server.is_pooled)
         self.assertEquals(lvs_service.ipvsManager.cmdList,
                           ['-a -t 127.0.0.1:80 -r 127.0.0.1'])
         lvs_service.addServer(self.server)
@@ -206,7 +202,6 @@ class LVSServiceTestCase(PyBalTestCase):
         lvs_service.addServer(self.server)
         self.server.pool = False
         lvs_service.removeServer(self.server)
-        self.assertFalse(self.server.is_pooled)
         self.assertEquals(lvs_service.ipvsManager.cmdList,
                           ['-d -t 127.0.0.1:80 -r 127.0.0.1'])
 
