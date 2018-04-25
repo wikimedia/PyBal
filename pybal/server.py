@@ -46,17 +46,17 @@ class Server:
         self.monitors = set()
 
         # A few invariants that SHOULD be maintained (but currently may not be):
-        # P0: pooled => enabled /\ ready
-        # P1: up => pooled \/ !enabled \/ !ready
-        # P2: pooled => up \/ !canDepool
+        # P0: pool => enabled /\ ready
+        # P1: up => pool \/ !enabled \/ !ready
+        # P2: pool => up \/ !canDepool
 
         self.weight = self.DEF_WEIGHT
         # Ideally, this server being down means it should be depooled
         # if depool-threshold allows
         self.up = False
-        # .pooled is managed by Coordinator, indicating the immediate intention
+        # .pool is managed by Coordinator, indicating the immediate intention
         # to pool or depool this server. is_pooled should follow this closely.
-        self.pooled = False
+        self.pool = False
         # .is_pooled is set by LVSService, immediately after this server has
         # been pooled or depooled. It represents the actual state of this server
         # in IPVS as far as PyBal is aware
@@ -165,7 +165,7 @@ class Server:
 
         self.ready = True
         self.up = self.DEF_STATE
-        self.pooled = self.DEF_STATE
+        self.pool = self.DEF_STATE
         self.maintainState()
 
         self.createMonitoringInstances(coordinator)
@@ -242,16 +242,16 @@ class Server:
     def textStatus(self):
         return "%s/%s/%s" % (self.enabled and "enabled" or "disabled",
                              self.up and "up" or (self.calcPartialStatus() and "partially up" or "down"),
-                             self.pooled and "pooled" or "not pooled")
+                             self.pool and "pooled" or "not pooled")
 
     def maintainState(self):
         """Maintains a few invariants on configuration changes"""
 
         # P0
         if not self.enabled or not self.ready:
-            self.pooled = False
+            self.pool = False
         # P1
-        if not self.pooled and self.enabled:
+        if not self.pool and self.enabled:
             self.up = False
 
     def merge(self, configuration):
@@ -271,7 +271,7 @@ class Server:
 
     def dumpState(self):
         """Dump current state of the server"""
-        return {'pooled': self.pooled, 'weight': self.weight,
+        return {'pooled': self.pool, 'weight': self.weight,
                 'up': self.up, 'enabled': self.enabled}
 
     @classmethod

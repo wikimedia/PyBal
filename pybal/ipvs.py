@@ -241,7 +241,7 @@ class LVSService:
     def addServer(self, server):
         """Adds (pools) a single Server to the LVS state."""
 
-        assert server.pooled
+        assert server.pool
 
         if server not in self.servers:
             cmdList = [self.ipvsManager.commandAddServer(self.service(),
@@ -259,7 +259,7 @@ class LVSService:
     def removeServer(self, server):
         """Removes (depools) a single Server from the LVS state."""
 
-        assert not server.pooled
+        assert not server.pool
 
         cmdList = [self.ipvsManager.commandRemoveServer(self.service(),
                                                         server)]

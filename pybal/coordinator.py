@@ -97,7 +97,7 @@ class Coordinator:
 
         # Hand over enabled servers to LVSService
         self.lvsservice.assignServers(
-            set([server for server in self.servers.itervalues() if server.pooled]))
+            set([server for server in self.servers.itervalues() if server.pool]))
 
     def refreshModifiedServers(self):
         """
@@ -108,7 +108,7 @@ class Coordinator:
             if not server.modified: continue
 
             server.up = server.calcStatus()
-            server.pooled = server.enabled and server.up
+            server.pool = server.enabled and server.up
 
     def resultDown(self, monitor, reason=None):
         """
@@ -127,7 +127,7 @@ class Coordinator:
 
         if server.up:
             server.up = False
-            if server.pooled: self.depool(server)
+            if server.pool: self.depool(server)
 
     def resultUp(self, monitor):
         """
@@ -147,10 +147,10 @@ class Coordinator:
     def depool(self, server):
         """Depools a single Server, if possible"""
 
-        assert server.pooled
+        assert server.pool
 
         if self.canDepool():
-            server.pooled = False
+            server.pool = False
             self.lvsservice.removeServer(server)
             self.pooledDownServers.discard(server)
             self.metrics['servers_pooled'].labels(**self.metric_labels).dec()
@@ -170,8 +170,8 @@ class Coordinator:
 
         assert server.enabled and server.ready
 
-        if not server.pooled:
-            server.pooled = True
+        if not server.pool:
+            server.pool = True
             self.lvsservice.addServer(server)
             self.metrics['servers_pooled'].labels(**self.metric_labels).inc()
         else:
@@ -285,7 +285,7 @@ class Coordinator:
         self.metrics['servers_pooled'].labels(
             **self.metric_labels
             ).set(
-                len([s for s in self.servers.itervalues() if s.pooled]))
+                len([s for s in self.servers.itervalues() if s.pool]))
         self._updatePooledDownMetrics()
 
     def _updateServerMetrics(self):

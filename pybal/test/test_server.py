@@ -184,12 +184,12 @@ class ServerTestCase(PyBalTestCase):
         self.assertEquals(len(textStatus.split('/')), 3)
 
     def testMaintainState(self):
-        self.server.pooled = True
+        self.server.pool = True
         self.server.enabled = False
         self.server.maintainState()
-        self.assertFalse(self.server.pooled)
+        self.assertFalse(self.server.pool)
 
-        self.server.pooled = False
+        self.server.pool = False
         self.server.enabled = True
         self.server.maintainState()
         self.assertFalse(self.server.up)

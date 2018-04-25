@@ -172,11 +172,11 @@ class LVSServiceTestCase(PyBalTestCase):
         old_servers = {ServerStub('a'), ServerStub('b'), ServerStub('c')}
         new_servers = {ServerStub('c'), ServerStub('d'), ServerStub('e')}
         for server in old_servers:
-            server.pooled = True
+            server.pool = True
             lvs_service.addServer(server)
         lvs_service.ipvsManager.cmdList = []
         for server in (old_servers | new_servers):
-            server.pooled = (server in new_servers)
+            server.pool = (server in new_servers)
         lvs_service.assignServers(new_servers)
         self.assertEquals(
             sorted(lvs_service.ipvsManager.cmdList),
@@ -185,12 +185,12 @@ class LVSServiceTestCase(PyBalTestCase):
         )
         for server in (old_servers | new_servers):
             self.assertEquals(server.is_pooled, server in new_servers)
-            self.assertEquals(server.is_pooled, server.pooled)
+            self.assertEquals(server.is_pooled, server.pool)
 
     def testAddServer(self):
         """Test `LVSService.addServer`."""
         lvs_service = pybal.ipvs.LVSService('http', self.service, self.config)
-        self.server.pooled = True
+        self.server.pool = True
         lvs_service.addServer(self.server)
         self.assertTrue(self.server.is_pooled)
         self.assertEquals(lvs_service.ipvsManager.cmdList,
@@ -202,9 +202,9 @@ class LVSServiceTestCase(PyBalTestCase):
     def testRemoveServer(self):
         """Test `LVSService.removeServer`."""
         lvs_service = pybal.ipvs.LVSService('http', self.service, self.config)
-        self.server.pooled = True
+        self.server.pool = True
         lvs_service.addServer(self.server)
-        self.server.pooled = False
+        self.server.pool = False
         lvs_service.removeServer(self.server)
         self.assertFalse(self.server.is_pooled)
         self.assertEquals(lvs_service.ipvsManager.cmdList,

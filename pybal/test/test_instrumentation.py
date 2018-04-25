@@ -42,7 +42,7 @@ class WebBaseTestCase(PyBalTestCase):
                 weight = 10
                 s = ServerStub(host, ip=ip, port=port, weight=weight,
                                lvsservice=lvsservice)
-                s.pooled = True
+                s.pool = True
                 s.up = True
                 coord.servers[host] = s
             self.coordinators.append(coord)

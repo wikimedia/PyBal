@@ -27,7 +27,7 @@ class ServerStub(object):
         if ip is not None:
             (self.ip6_addresses if ':' in ip else self.ip4_addresses).add(ip)
         self.up = False
-        self.pooled = False
+        self.pool = False
 
     def textStatus(self):
         return '...'
@@ -37,7 +37,7 @@ class ServerStub(object):
 
     def dumpState(self):
         """Dump current state of the server"""
-        return {'pooled': self.pooled, 'weight': self.weight,
+        return {'pooled': self.pool, 'weight': self.weight,
                 'up': self.up}
 
 
