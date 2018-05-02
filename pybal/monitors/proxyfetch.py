@@ -19,14 +19,13 @@ log = util.log
 class RedirHTTPPageGetter(client.HTTPPageGetter):
     """PageGetter that accepts redirects as valid responses"""
 
-    def handleStatus_301(self):
-        """If we get a redirect, that's ok"""
-        # Twisted uses old-style classes, yuck
-        return client.HTTPPageGetter.handleStatus_200(self)
+    # Handle 3xx (redirect) status as 200 OK
+    handleStatus_301 = client.HTTPPageGetter.handleStatus_200
+    handleStatus_302 = client.HTTPPageGetter.handleStatus_200
+    handleStatus_303 = client.HTTPPageGetter.handleStatus_200
 
-    def handleStatus_200(self):
-        """Fail on 200 (we're expecting a redirect here)"""
-        return self.handleStatusDefault()
+    # Fail on 200 (we're expecting a redirect here)
+    handleStatus_200 = client.HTTPPageGetter.handleStatusDefault
 
 
 class RedirHTTPClientFactory(client.HTTPClientFactory):

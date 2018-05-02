@@ -323,7 +323,6 @@ class RedirHTTPPageGetterTestCase(unittest.TestCase):
         self.protocol.factory = mock.Mock(spec=pybal.monitors.proxyfetch.RedirHTTPClientFactory)
         self.protocol.headers = {}
 
-    @unittest.skip("Fails for status 302 and 303")
     def testHandleStatus3xx(self):
         for status in range(301, 304):
             self.protocol.handleStatus(b'1.1', bytes(str(status)), b'Message')
