@@ -57,7 +57,7 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
 
         self.resolver = None
         self.checkCall = None
-        self.DNSQueryDeferred = defer.Deferred()
+        self.DNSQueryDeferred = None
         self.checkStartTime = None
 
     def run(self):
@@ -80,7 +80,8 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         if self.checkCall and self.checkCall.active():
             self.checkCall.cancel()
 
-        self.DNSQueryDeferred.cancel()
+        if self.DNSQueryDeferred is not None:
+            self.DNSQueryDeferred.cancel()
 
     def check(self):
         """Periodically called method that does a single uptime check."""
