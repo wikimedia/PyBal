@@ -33,6 +33,7 @@ class ProcessGroupProcess(process.Process, object):
             reactor, command, args, environment, path, proto,
             uid=uid, gid=gid, childFDs=childFDs
         )
+        self.reactor = reactor
 
     def _execChild(self, path, uid, gid, executable, args, environment):
         if self.sessionLeader:

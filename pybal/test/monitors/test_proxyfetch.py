@@ -27,15 +27,6 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
 
     monitorClass = ProxyFetchMonitoringProtocol
 
-    def assertCheckScheduled(self, mock_callLater, mock_DC):
-        """
-        Tests whether a new check has been scheduled using reactor.mock_callLater
-        Requires mocked callLater and DelayedCall as arguments
-        """
-
-        self.assertIs(self.monitor.checkCall, mock_DC)
-        mock_callLater.assert_called_with(self.monitor.intvCheck, self.monitor.check)
-
     def setUp(self):
         self.config['proxyfetch.url'] = '["http://en.wikipedia.org/test.php"]'
         super(ProxyFetchMonitoringProtocolTestCase, self).setUp()

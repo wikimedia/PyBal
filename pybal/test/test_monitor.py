@@ -33,6 +33,16 @@ class BaseMonitoringProtocolTestCase(PyBalTestCase):
         if self.monitor.active:
             self.monitor.stop()
 
+    def assertCheckScheduled(self, mock_callLater, mock_DC, checkMethod=None):
+        """
+        Tests whether a new check has been scheduled using reactor.mock_callLater
+        Requires mocked callLater and DelayedCall as arguments
+        """
+
+        self.assertIs(self.monitor.checkCall, mock_DC)
+        mock_callLater.assert_called_with(self.monitor.intvCheck,
+            checkMethod or self.monitor.check)
+
     def testRun(self):
         self.monitor.run()
         self.assertTrue(self.monitor.active)
