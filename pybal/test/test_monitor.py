@@ -15,8 +15,45 @@ import twisted.internet
 from .fixtures import PyBalTestCase
 
 
+class BaseMonitoringProtocolTestCase(PyBalTestCase):
+    """
+    Base test case class for pybal monitors, intended to
+    be subclassed by (all) individual monitors.
+    """
+
+    monitorClass = pybal.monitor.MonitoringProtocol
+
+    def setUp(self):
+        super(BaseMonitoringProtocolTestCase, self).setUp()
+        self.monitor = self.monitorClass(
+            self.coordinator, self.server, self.config)
+        self.monitor.reactor = twisted.internet.reactor
+
+    def tearDown(self):
+        if self.monitor.active:
+            self.monitor.stop()
+
+    def testRun(self):
+        self.monitor.run()
+        self.assertTrue(self.monitor.active)
+
+    def testRunAlreadyActive(self):
+        self.monitor.run()
+        with self.assertRaises(AssertionError):
+            self.monitor.run()
+        self.assertTrue(self.monitor.active)
+
+    def testStop(self):
+        self.monitor.run()
+        self.monitor.stop()
+        self.assertFalse(self.monitor.active)
+
+
 class MonitoringProtocolTestCase(PyBalTestCase):
-    """Test case for `pybal.monitor.MonitoringProtocol`."""
+    """
+    Test case for `pybal.monitor.MonitoringProtocol`.
+    This tests MonitoringProtocol methods in isolation.
+    """
 
     def setUp(self):
         super(MonitoringProtocolTestCase, self).setUp()
