@@ -77,7 +77,7 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
                                                  self.HTTP_STATUS)
 
         self.checkCall = None
-        self.getPageDeferred = defer.Deferred()
+        self.getPageDeferred = None
 
         self.checkStartTime = None
 
@@ -99,7 +99,8 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         if self.checkCall and self.checkCall.active():
             self.checkCall.cancel()
 
-        self.getPageDeferred.cancel()
+        if self.getPageDeferred is not None:
+            self.getPageDeferred.cancel()
 
     def check(self):
         """Periodically called method that does a single uptime check."""

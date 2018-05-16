@@ -91,8 +91,11 @@ class ProxyFetchMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
         self.assertEquals(monitor.expectedStatus, ProxyFetchMonitoringProtocol.HTTP_STATUS)
         self.assertEquals(monitor.URL, ["http://en.wikipedia.org/test.php"])
         self.assertIsNone(monitor.checkCall)
-        self.assertIsInstance(monitor.getPageDeferred, defer.Deferred)
+        self.assertIsNone(monitor.getPageDeferred)
         self.assertIsNone(monitor.checkStartTime)
+
+        # cleanup
+        monitor.stop()
 
     def testInitIncompleteConfig(self):
         del self.config['proxyfetch.url']
@@ -140,16 +143,23 @@ class ProxyFetchMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
         reactor.advance(self.monitor.intvCheck / 2)
         mock_check.assert_called_once()
 
-    def testCheck(self):
+    @mock.patch('pybal.monitors.proxyfetch.reactor',
+        new_callable=twisted.test.proto_helpers.MemoryReactor)
+    def testCheck(self, mock_reactor):
         startSeconds = seconds()
         self.monitor.active = True
-        with mock.patch.object(self.monitor, 'getProxyPage',
-                               return_value=defer.Deferred()) as mock_gPP:
+        with mock.patch.multiple(self.monitor,
+                                 getProxyPage=mock.DEFAULT,
+                                 _fetchSuccessful=mock.DEFAULT,
+                                 _fetchFailed=mock.DEFAULT,
+                                 _checkFinished=mock.DEFAULT) as mocks:
+            mocks['getProxyPage'].return_value = defer.Deferred()
             self.monitor.check()
+
         self.assertGreaterEqual(self.monitor.checkStartTime, startSeconds)
 
         # Check getProxyPage keyword arguments
-        kwargs = mock_gPP.call_args[1]
+        kwargs = mocks['getProxyPage'].call_args[1]
         self.assertEqual(kwargs['method'], "GET")
         self.assertEqual(kwargs['host'], self.server.ip)
         self.assertEqual(kwargs['port'], self.server.port)
@@ -157,14 +167,33 @@ class ProxyFetchMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
         self.assertEqual(kwargs['timeout'], self.monitor.toGET)
         self.assertFalse(kwargs['followRedirect'])
 
-        # Check whether the correct callbacks have been setup
-        testDeferred = defer.Deferred()
-        testDeferred.addCallbacks(self.monitor._fetchSuccessful,
-                                  self.monitor._fetchFailed)
-        testDeferred.addBoth(self.monitor._checkFinished)
-        self.assertListEqual(self.monitor.getPageDeferred.callbacks[-2:],
-                             testDeferred.callbacks)
-        testDeferred.cancel()
+        # Check whether the callback works
+        testResult = "Test page"
+        self.monitor.getPageDeferred.callback(testResult)
+
+        mocks['_fetchSuccessful'].assert_called_once_with(testResult)
+        mocks['_fetchFailed'].assert_not_called()
+        mocks['_checkFinished'].assert_called()
+
+    @mock.patch('pybal.monitors.proxyfetch.reactor',
+        new_callable=twisted.test.proto_helpers.MemoryReactor)
+    def testCheckFailure(self, mock_reactor):
+        self.monitor.active = True
+        with mock.patch.multiple(self.monitor,
+                                 getProxyPage=mock.DEFAULT,
+                                 _fetchSuccessful=mock.DEFAULT,
+                                 _fetchFailed=mock.DEFAULT,
+                                 _checkFinished=mock.DEFAULT) as mocks:
+            mocks['getProxyPage'].return_value = defer.Deferred()
+            self.monitor.check()
+
+        # Check whether the callback works
+        testFailure = failure.Failure(defer.TimeoutError("Test failure"))
+        self.monitor.getPageDeferred.errback(testFailure)
+
+        mocks['_fetchFailed'].assert_called_once_with(testFailure)
+        mocks['_fetchSuccessful'].assert_not_called()
+        mocks['_checkFinished'].assert_called()
 
     def testCheckInactive(self):
         """
