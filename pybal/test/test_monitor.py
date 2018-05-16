@@ -6,7 +6,7 @@
   This module contains tests for `pybal.monitor`.
 
 """
-import unittest
+import unittest, mock
 
 import pybal.monitor
 import pybal.util
@@ -27,16 +27,24 @@ class MonitoringProtocolTestCase(PyBalTestCase):
 
     def testRun(self):
         """Test `MonitoringProtocol.run`."""
-        self.monitor.run()
+        self.assertIsNone(self.monitor._shutdownTriggerID)
+
+        with mock.patch.object(self.monitor.reactor, 'addSystemEventTrigger') as mock_ASET:
+            self.monitor.run()
         self.assertTrue(self.monitor.active)
+        mock_ASET.assert_called_with('before', 'shutdown', self.monitor.stop)
+        self.assertIsNotNone(self.monitor._shutdownTriggerID)
+
         with self.assertRaises(AssertionError):
             self.monitor.run()
 
     def testStop(self):
         """Test `MonitoringProtocol.stop`."""
         self.monitor.run()
+        self.assertIsNotNone(self.monitor._shutdownTriggerID)
         self.monitor.stop()
         self.assertFalse(self.monitor.active)
+        self.assertIsNone(self.monitor._shutdownTriggerID)
 
     def testStopBeforeShutdown(self):
         """`MonitoringProtocol` stops on system shutdown."""

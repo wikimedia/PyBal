@@ -46,9 +46,7 @@ class MonitoringProtocol(object):
 
         self.active = False
         self.firstCheck = True
-
-        # Install cleanup handler
-        self.reactor.addSystemEventTrigger('before', 'shutdown', self.stop)
+        self._shutdownTriggerID = None
 
         self.metric_labels = {
             'service': self.server.lvsservice.name,
@@ -61,9 +59,17 @@ class MonitoringProtocol(object):
         assert self.active is False
         self.active = True
 
+        # Install cleanup handler
+        self._shutdownTriggerID = self.reactor.addSystemEventTrigger(
+            'before', 'shutdown', self.stop)
+
     def stop(self):
         """Stop the monitoring; cancel any running or upcoming checks"""
         self.active = False
+        if self._shutdownTriggerID is not None:
+            # Remove cleanup handler
+            self.reactor.removeSystemEventTrigger(self._shutdownTriggerID)
+            self._shutdownTriggerID = None
 
     def name(self):
         """Returns a printable name for this monitor"""
