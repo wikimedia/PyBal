@@ -391,8 +391,6 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         self.factory.sendAdvertisements()
 
     def testSetEnabledAddressFamilies(self):
-        # FIXME: setEnabledAddressFamilies docstr needs updating now we have sets
-
         af = {
             (constants.AFI_INET, constants.SAFI_UNICAST),
             (constants.AFI_INET, constants.SAFI_MULTICAST),

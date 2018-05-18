@@ -801,8 +801,12 @@ class BGPServerFactory(BGPFactory):
         self.myASN = myASN
 
     def buildProtocol(self, addr):
-        """Builds a BGPProtocol instance by finding an appropriate
+        """
+        Builds a BGPProtocol instance by finding the appropriate
         BGPPeering factory instance to hand over to.
+
+        If incoming connection (addr) is not registered as a peers,
+        returns None to indicate the connection should be closed.
         """
         self.log("Connection received from %s" % addr.host, logging.INFO)
 
@@ -868,7 +872,7 @@ class BGPPeering(BGPFactory):
         self.__dict__[name] = value
 
     def buildProtocol(self, addr):
-        """Builds a BGP protocol instance"""
+        """Builds a BGP protocol instance for an outgoing connection"""
 
         self.log("Building a new BGP protocol instance")
 
@@ -1139,11 +1143,10 @@ class BGPPeering(BGPFactory):
 
     def setEnabledAddressFamilies(self, addressFamilies):
         """
-        Expects a dict with address families to be enabled,
-        containing iterables with Sub-AFIs
+        Expects a set of tuples of (AF, AFI) to be enabled
         """
 
-        for afi, safi in list(addressFamilies):
+        for afi, safi in addressFamilies:
             if afi not in SUPPORTED_AFI or safi not in SUPPORTED_SAFI:
                 raise ValueError("Address family (%d, %d) not supported" % (afi, safi))
 
