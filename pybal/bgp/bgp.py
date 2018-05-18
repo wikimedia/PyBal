@@ -32,7 +32,8 @@ from zope.interface import implements, Interface
 
 # Twisted imports
 from twisted import copyright
-from twisted.internet import reactor, protocol, base, interfaces, defer
+from twisted.internet import protocol, base, interfaces, defer
+import twisted.internet.reactor
 
 # BGP imports
 from constants import *
@@ -768,6 +769,8 @@ class BGPFactory(protocol.Factory):
     myASN = None
     bgpId = None
 
+    reactor = twisted.internet.reactor
+
     def log(self, msg, lvl=logging.DEBUG):
         s = "bgp.BGPFactory@{}".format(hex(id(self)))
         _log(msg, lvl, s)
@@ -1098,7 +1101,7 @@ class BGPPeering(BGPFactory):
         self.log("(Re)connect to %s" % self.peerAddr, logging.INFO)
 
         if self.fsm.state != ST_ESTABLISHED:
-            reactor.connectTCP(self.peerAddr, PORT, self)
+            self.reactor.connectTCP(self.peerAddr, PORT, self)
             return True
         else:
             return False
