@@ -552,14 +552,12 @@ class BGP(protocol.Protocol):
             ASN, holdTime, bgpId)
         self.log(msg, logging.INFO)
 
-        self.peerId = bgpId
         self.bgpPeering.setPeerId(bgpId)
 
         # Perform collision detection
-        self.collisionDetect()
-
-        self.negotiateHoldTime(holdTime)
-        self.fsm.openReceived()
+        if self.bgpPeering.peerId == bgpId and not self.collisionDetect():
+            self.negotiateHoldTime(holdTime)
+            self.fsm.openReceived()
 
     def updateReceived(self, withdrawnPrefixes, attributes, nlri):
         """Called when a BGP Update message was received."""
@@ -1065,29 +1063,27 @@ class BGPPeering(BGPFactory):
         """
 
         # Construct a list of other connections to examine
-        openConfirmConnections = [c
+        collidingConns = {c
              for c
              in self.inConnections + self.outConnections
-             if c != protocol and c.fsm.state in (ST_OPENCONFIRM, ST_ESTABLISHED)]
+             if c != protocol and c.fsm.state in (ST_OPENCONFIRM, ST_ESTABLISHED)}
 
         # We need at least 1 other connections to have a collision
-        if len(openConfirmConnections) < 1:
+        if not collidingConns:
             return False
 
         # A collision exists at this point.
 
         # If one of the other connections is already in ESTABLISHED state,
         # it wins
-        if ST_ESTABLISHED in [c.fsm.state for c in openConfirmConnections]:
+        if ST_ESTABLISHED in (c.fsm.state for c in collidingConns):
             protocol.fsm.openCollisionDump()
             return True
 
         # Break the tie
-        assert self.bgpId != protocol.peerId
-        if self.bgpId < protocol.peerId:
-            dumpList = self.outConnections
-        elif self.bgpId > protocol.peerId:
-            dumpList = self.inConnections
+        assert protocol.factory is self
+        assert self.bgpId != self.peerId
+        dumpList = self.outConnections if self.bgpId < self.peerId else self.inConnections
 
         for c in dumpList:
             try:

@@ -287,7 +287,6 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         self.assertTrue(otherProtocol.deferred.called)  # Fired errback?
         self.assertIsNone(self.factory.peerId)
 
-    @unittest.skip("Bug: collisionDetect accesses BGP.peerId which doesn't exist")
     def testCollisionDetect(self):
         requestingProtocol = self.factory.buildProtocol(self.testAddr)
         requestingProtocol.fsm = mock.Mock(spec=fsm.FSM)
@@ -324,10 +323,10 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         # Set all other protocols to state OPENCONFIRM, and a high BGP id
         for p in otherProtocols:
             p.fsm.state = fsm.ST_OPENCONFIRM
-            p.factory.peerId = 200
+        self.factory.setPeerId(200)
 
         # Set a lower BGP id than the peers
-        requestingProtocol.bgpId = 100
+        self.factory.bgpId = 100
 
         reset_mocks()
 
@@ -346,12 +345,10 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         reset_mocks()
 
         # Swap sides. Our initiating connection should win.
-        requestingProtocol.bgpId = 300
+        self.factory.bgpId = 300
         self.assertFalse(self.factory.collisionDetect(requestingProtocol))
         requestingProtocol.fsm.openCollisionDump.assert_not_called()
         incomingConnection.fsm.openCollisionDump.assert_called_once()
-
-        # TODO: so what about the non-requesting outgoing connection?
 
     def testConnect(self):
         b = self.factory.connect()
