@@ -176,13 +176,16 @@ class FSM(object):
     def manualStart(self):
         """
         Should be called when a BGP ManualStart event (event 1) is requested.
-        Note that a protocol instance does not yet exist at this point,
-        so this method requires some support from BGPPeering.manualStart().
+        Note that a protocol instance does not yet exist at this point.
         """
 
         if self.state == ST_IDLE:
             self.connectRetryCounter = 0
             self.connectRetryTimer.reset(self.connectRetryTime)
+            if self.bgpPeering is not None:
+                # Create outbound connection
+                if self.bgpPeering.connect():
+                    self.state = ST_CONNECT
 
     def manualStop(self):
         """Should be called when a BGP ManualStop event (event 2) is requested."""
@@ -203,7 +206,7 @@ class FSM(object):
         """
         Should be called when a BGP Automatic Start event (event 3) is requested.
         Returns True or False to indicate BGPPeering whether a connection attempt
-        should be initiated.
+        has been initiated.
         """
 
         if self.state == ST_IDLE:
@@ -213,7 +216,12 @@ class FSM(object):
             else:
                 self.connectRetryCounter = 0
                 self.connectRetryTimer.reset(self.connectRetryTime)
-                return True
+                # Create outbound connection if possible
+                if self.bgpPeering is not None and self.bgpPeering.connect():
+                    self.state = ST_CONNECT
+                    return True
+                else:
+                    return False
 
     def connectionMade(self):
         """Should be called when a TCP connection has successfully been

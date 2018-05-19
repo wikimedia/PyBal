@@ -225,8 +225,8 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
             self.fsm.manualStart()
         self.assertEqual(self.fsm.connectRetryCounter, 0)
         self.assertTimerReset(self.fsm.connectRetryTimer, self.fsm.connectRetryTime)
-
-        # TODO: test bgp.ManualStart code
+        self.fsm.bgpPeering.connect.assert_called()
+        self.assertState(ST_CONNECT)
 
     @edge(ST_IDLE, 3)
     def test_Idle_event_3(self, event=3):
@@ -234,6 +234,8 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
             connect = self.fsm.automaticStart()
         self.assertEqual(self.fsm.connectRetryCounter, 0)
         self.assertTimerReset(self.fsm.connectRetryTimer, self.fsm.connectRetryTime)
+        self.fsm.bgpPeering.connect.assert_called()
+        self.assertState(ST_CONNECT)
         self.assertTrue(connect)
 
     @edge(ST_IDLE, 2, 9, 10, 11, 17, 18, 19, 20, 23, 24, 26)

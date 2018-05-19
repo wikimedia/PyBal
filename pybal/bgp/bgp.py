@@ -869,29 +869,34 @@ class BGPPeering(BGPFactory):
         #  https://docs.python.org/2/reference/datamodel.html#customizing-attribute-access
         self.__dict__[name] = value
 
-    def buildProtocol(self, addr):
+    def buildProtocol(self, peerAddr):
         """Builds a BGP protocol instance for an outgoing connection"""
 
         self.log("Building a new BGP protocol instance")
 
-        p = BGPFactory.buildProtocol(self, addr)
+        p = BGPFactory.buildProtocol(self, peerAddr)
         if p is not None:
-            self._initProtocol(p, addr)
+            self._initProtocol(p, peerAddr)
             self.outConnections.append(p)
 
         return p
 
-    def takeServerConnection(self, addr):
+    def takeServerConnection(self, peerAddr):
         """Builds a BGP protocol instance for a server connection"""
 
-        p = BGPFactory.buildProtocol(self, addr)
+        p = BGPFactory.buildProtocol(self, peerAddr)
         if p is not None:
-            self._initProtocol(p, addr)
+            self._initProtocol(p, peerAddr)
             self.inConnections.append(p)
+
+            # FIXME: why is this needed and not handled by the FSM?
+            # This appears to be because FSM events 4 and 5 are not implemented?
+            if peerAddr.port != PORT:
+                p.fsm.state = ST_ACTIVE
 
         return p
 
-    def _initProtocol(self, protocol, addr):
+    def _initProtocol(self, protocol, peerAddr):
         """Initializes a BGPProtocol instance"""
 
         protocol.bgpPeering = self
@@ -903,11 +908,6 @@ class BGPPeering(BGPFactory):
         # Create a new fsm for internal use for now
         self.fsm = BGPFactory.FSM(self)
         self.fsm.state = protocol.fsm.state
-
-        if addr.port == PORT:
-            protocol.fsm.state = ST_CONNECT
-        else:
-            protocol.fsm.state = ST_ACTIVE
 
         # Set up callback and error handlers
         protocol.deferred.addCallbacks(self.sessionEstablished, self.protocolError)
@@ -928,11 +928,7 @@ class BGPPeering(BGPFactory):
     def manualStart(self):
         """BGP ManualStart event (event 1)"""
 
-        if self.fsm.state == ST_IDLE:
-            self.fsm.manualStart()
-            # Create outbound connection
-            self.connect()
-            self.fsm.state = ST_CONNECT
+        self.fsm.manualStart()
 
     def manualStop(self):
         """BGP ManualStop event (event 2) Returns a Deferred that will fire once the connection(s) have closed"""
@@ -951,11 +947,7 @@ class BGPPeering(BGPFactory):
     def automaticStart(self, idleHold=False):
         """BGP AutomaticStart event (event 3)"""
 
-        if self.fsm.state == ST_IDLE:
-            if self.fsm.automaticStart(idleHold):
-                # Create outbound connection
-                self.connect()
-                self.fsm.state = ST_CONNECT
+        self.fsm.automaticStart(idleHold)
 
     def releaseResources(self, protocol):
         """

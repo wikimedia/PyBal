@@ -102,11 +102,12 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         self.assertIn(p, self.factory.outConnections)
 
     def testTakeServerConnection(self):
-        with mock.patch.object(self.factory, '_initProtocol') as mock_initProtocol:
-            p = self.factory.takeServerConnection(self.testAddr)
+        self.testAddr.port = 10001
+        p = self.factory.takeServerConnection(self.testAddr)
         self.assertIsInstance(p, self.factory.protocol)
-        mock_initProtocol.assert_called_with(p, self.testAddr)
         self.assertIn(p, self.factory.inConnections)
+        self.assertIs(p.bgpPeering, self.factory)
+        self.assertEqual(p.fsm.state, fsm.ST_ACTIVE)
 
     def testInitProtocol(self):
         testProtocol = BGPFactory.buildProtocol(self.factory, self.testAddr)
@@ -121,9 +122,6 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         self.assertIs(origFSM.protocol, testProtocol)
         self.assertIsInstance(self.factory.fsm, BGPFactory.FSM)
         self.assertEqual(self.factory.fsm.state, origState)
-
-        # FIXME: document the need for this in the production code
-        self.assertEqual(testProtocol.fsm.state, fsm.ST_CONNECT)
 
     def testInitProtocolCallback(self):
         testProtocol = BGPFactory.buildProtocol(self.factory, self.testAddr)
@@ -149,21 +147,8 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
 
     def testManualStart(self):
         with mock.patch.object(self.factory, 'fsm') as mock_fsm:
-            mock_fsm.state = fsm.ST_IDLE
-            with mock.patch.object(self.factory, 'connect') as mock_connect:
-                self.factory.manualStart()
+            self.factory.manualStart()
         mock_fsm.manualStart.assert_called_once()
-        mock_connect.assert_called()
-        self.assertEqual(mock_fsm.state, fsm.ST_CONNECT)
-
-    def testManualStartNotIdle(self):
-        with mock.patch.object(self.factory, 'fsm') as mock_fsm:
-            mock_fsm.state = fsm.ST_ACTIVE
-            with mock.patch.object(self.factory, 'connect') as mock_connect:
-                self.factory.manualStart()
-        mock_fsm.manualStart.assert_not_called()
-        mock_connect.assert_not_called()
-        self.assertEqual(mock_fsm.state, fsm.ST_ACTIVE)
 
     def testManualStop(self):
         testProtocol = self.factory.buildProtocol(self.testAddr)
@@ -183,21 +168,8 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
 
     def testAutomaticStart(self):
         with mock.patch.object(self.factory, 'fsm') as mock_fsm:
-            mock_fsm.state = fsm.ST_IDLE
-            with mock.patch.object(self.factory, 'connect') as mock_connect:
-                self.factory.automaticStart()
+            self.factory.automaticStart()
         mock_fsm.automaticStart.assert_called_once()
-        mock_connect.assert_called()
-        self.assertEqual(mock_fsm.state, fsm.ST_CONNECT)
-
-    def testAutomaticStartNotIdle(self):
-        with mock.patch.object(self.factory, 'fsm') as mock_fsm:
-            mock_fsm.state = fsm.ST_ESTABLISHED
-            with mock.patch.object(self.factory, 'connect') as mock_connect:
-                self.factory.automaticStart()
-        mock_fsm.automaticStart.assert_not_called()
-        mock_connect.assert_not_called()
-        self.assertEqual(mock_fsm.state, fsm.ST_ESTABLISHED)
 
     def testConnectionClosed(self):
         self.factory.fsm.allowAutomaticStart = True
