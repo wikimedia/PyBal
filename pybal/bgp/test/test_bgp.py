@@ -243,59 +243,6 @@ class BGPTestCase(unittest.TestCase):
         # Verify a truncated message raises BadMessageLength
         self.assertRaises(exceptions.BadMessageLength, self.proto.parseNotification, b' ')
 
-class NaiveBGPPeeringTestCase(unittest.TestCase):
-
-    def setUp(self):
-        self.peering = bgp.NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
-        self.peering.addressFamilies = set([(1, 1), (2, 1)])
-        self.peering.fsm.state = bgp.ST_ESTABLISHED
-
-        proto = bgp.BGP()
-        proto.transport = proto_helpers.StringTransportWithDisconnection()
-        self.peering.estabProtocol = proto
-
-        self.peering.toAdvertise = {(1, 1): set([]),
-                                    (2, 1): set([])}
-
-        med = attributes.MEDAttribute(50)
-        aspath = attributes.ASPathAttribute([(2, [64496])])
-        origin = attributes.OriginAttribute((0))
-
-        self.attrs = {
-            attributes.MEDAttribute: med,
-            attributes.ASPathAttribute: aspath,
-            attributes.OriginAttribute: origin,
-        }
-
-    def testSetV4Advertisements(self):
-        nexthop = attributes.NextHopAttribute('10.192.16.139')
-
-        self.attrs[attributes.NextHopAttribute] = nexthop
-
-        adv_v4 = bgp.Advertisement(prefix=ip.IPv4IP('10.2.1.18'),
-                                   attributes=self.attrs,
-                                   addressfamily=(1, 1))
-
-        self.peering.advertised = { (1, 1): set([ adv_v4 ]),
-                                    (2, 1): set([]) }
-
-        self.peering.setAdvertisements(set())
-
-    def testSetV6Advertisements(self):
-        nlri = attributes.MPReachNLRIAttribute((bgp.AFI_INET6, bgp.SAFI_UNICAST,
-            ip.IPv6IP('2620:0:860:101:10:192:1:3'), []))
-
-        self.attrs[attributes.MPReachNLRIAttribute] = nlri
-
-        adv_v6 = bgp.Advertisement(prefix=ip.IPv6IP('2620:0:860:ed1a:0:0:0:1'),
-                                   attributes=self.attrs,
-                                   addressfamily=(2, 1))
-
-        self.peering.advertised = { (1, 1): set([]),
-                                    (2, 1): set([ adv_v6 ]) }
-
-        self.peering.setAdvertisements(set())
-
 
 class BGPOpenParserTestCase(unittest.TestCase):
 
