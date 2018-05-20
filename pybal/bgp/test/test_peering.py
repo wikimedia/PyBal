@@ -14,7 +14,7 @@ from twisted.internet.address import IPv4Address
 from twisted.python import failure
 import twisted.internet.base
 import twisted.internet.error
-from twisted.test.proto_helpers import MemoryReactorClock
+import twisted.test.proto_helpers
 
 # BGP imports
 from ..bgp import BGP
@@ -30,7 +30,7 @@ class BGPFactoryTestCase(unittest.TestCase):
 
     def setUp(self):
         self.factory = BGPFactory()
-        self.factory.reactor = MemoryReactorClock()
+        self.factory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
         self.factory.protocol = BGP
         self.factory.myASN = 64600
 
@@ -52,7 +52,7 @@ class BGPServerFactoryTestCase(BGPFactoryTestCase):
             '127.0.0.2': mock.Mock(spec=BGPPeering)
         }
         self.factory = BGPServerFactory(self.testPeers, self.testASN)
-        self.factory.reactor = MemoryReactorClock()
+        self.factory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
 
         self._log_patcher = mock.patch.object(bgp.BGPFactory, 'log')
         self._log_patcher.start()
@@ -77,7 +77,7 @@ class BGPServerFactoryTestCase(BGPFactoryTestCase):
 class BGPPeeringTestCase(BGPFactoryTestCase):
     def setUp(self):
         self.factory = BGPPeering(self.testASN, peerAddr='127.0.0.2')
-        self.factory.reactor = MemoryReactorClock()
+        self.factory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
         # Mock factory.log and fsm.FSM.log for less noisy output
         self.factory.log = mock.Mock()
         self._log_patcher = mock.patch.object(fsm.FSM, 'log')
@@ -400,3 +400,147 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         af.add((66, constants.SAFI_UNICAST))
         with self.assertRaises(ValueError):
             self.factory.setEnabledAddressFamilies(af)
+
+
+class PeeringSessionToOpenSentTestCase(unittest.TestCase):
+    """
+    Base class with shared code for PeeringClientSessionToOpenSentTestCase
+    and PeeringServerSessionToOpenSentTestCase
+    """
+
+    def assertState(self, state):
+        self.assertEqual(self.fsm.state, state,
+            "State is {} instead of expected {}".format(
+                bgp.stateDescr[self.fsm.state], bgp.stateDescr[state]))
+
+    def setUp(self):
+        self.myASN = 64601
+        self.peerAddr =  IPv4Address('TCP', '127.0.0.1', constants.PORT)
+        self.enabledAddressFamilies = {(constants.AFI_INET, constants.SAFI_UNICAST)}
+
+    def tearDown(self):
+        # The BGPPeering factory keeps its own separate FSM
+        for fsm in [self.peering.fsm, self.protocol.fsm]:
+            for timer in (fsm.connectRetryTimer, fsm.holdTimer, fsm.keepAliveTimer,
+                          fsm.delayOpenTimer, fsm.idleHoldTimer):
+                timer.cancel()
+
+    def _setupPeering(self):
+        self.peering = BGPPeering(myASN=self.myASN, peerAddr=self.peerAddr.host)
+        self.peering.reactor = twisted.test.proto_helpers.MemoryReactorClock()
+        self.peering.setEnabledAddressFamilies(self.enabledAddressFamilies)
+
+        # Mock logging for less noisy output
+        self.peering.log = mock.Mock()
+        self.peering.fsm.log = mock.Mock()
+
+    def _startSession(self):
+        self.peering.automaticStart()
+
+        self.assertState(fsm.ST_CONNECT)
+        self.assertTrue(self.peering.reactor.tcpClients)
+
+        # Pretend we're starting a connection
+
+        self.peering.startedConnecting(mock.Mock())
+
+    def _setupTransport(self):
+        self.transport = twisted.test.proto_helpers.StringTransport(peerAddress=self.peerAddr)
+        self.transport.setTcpNoDelay = mock.Mock()
+
+    def _testSession(self):
+        self._setupPeering()
+
+        # There's no protocol yet, track BGPPeering's FSM
+        self.fsm = self.peering.fsm
+
+        self.assertState(fsm.ST_IDLE)
+
+        self._startSession()
+
+        # A connection has been made. Call buildProtocol
+        self._setupProtocol()
+
+        self.assertProtocolInitialized()
+
+        # peering.fsm has been replaced, start tracking the protocol's FSM
+        # instead
+        self.fsm = self.protocol.fsm
+
+        # Create a test transport
+        self._setupTransport()
+
+        # Connect the transport to the protocol
+        # It will call protocol.connectionMade() to start the protocol
+
+        self.protocol.makeConnection(self.transport)
+
+        self.assertState(fsm.ST_OPENSENT)
+        self.assertIsNotNone(self.peering.bgpId)
+
+        # Read the OPEN data that has been sent
+
+        openData = self.transport.value()
+        self.assertGreaterEqual(len(openData), 16)
+        self.transport.clear()
+
+
+class PeeringClientSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
+    """
+    Test case that sets up a BGPPeering instance and emulates a client session
+    up to state OpenSent
+    """
+
+    @mock.patch.object(fsm.FSM, 'log')
+    def _setupProtocol(self, mock_log):
+        # A client connection has been made. Call buildProtocol
+
+        self.protocol = self.peering.buildProtocol(self.peerAddr)
+
+    def assertProtocolInitialized(self):
+        self.assertIn(self.protocol, self.peering.outConnections)
+        self.assertState(fsm.ST_CONNECT)
+
+    def testSession(self):
+        self._testSession()
+
+
+class PeeringServerSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
+    """
+    Test case that sets up a BGPPeering instance and BGPServerFactory, and
+    emulates a server session up to state OpenSent
+    """
+
+    def setUp(self):
+        super(PeeringServerSessionToOpenSentTestCase, self).setUp()
+        # Set a high (client) port for peerAddr
+        self.peerAddr.port = 1000 + constants.PORT
+
+    def _setupPeering(self):
+        super(PeeringServerSessionToOpenSentTestCase, self)._setupPeering()
+        self._setupServerFactory()
+
+    def _setupServerFactory(self):
+        """
+        Sets up a BGPServerFactory instance and pretend it's listening
+        """
+
+        peers = {
+            self.peerAddr.host: self.peering
+        }
+        self.serverFactory = BGPServerFactory(peers, myASN=self.myASN)
+        self.serverFactory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
+
+    @mock.patch.object(fsm.FSM, 'log')
+    def _setupProtocol(self, mock_log):
+        # A client connection has been made.
+        # Call takeServerConnection to build a protocol
+
+        self.protocol = self.peering.takeServerConnection(self.peerAddr)
+
+    def assertProtocolInitialized(self):
+        self.assertIn(self.protocol, self.peering.inConnections)
+        self.assertState(fsm.ST_ACTIVE)
+
+    def testSession(self):
+        self._testSession()
