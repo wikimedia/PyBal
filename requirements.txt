@@ -1,3 +1,4 @@
 twisted
 PyOpenSSL
 prometheus_client
+treq
