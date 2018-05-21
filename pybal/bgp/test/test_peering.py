@@ -707,7 +707,6 @@ class NaiveInetConstructAndSendTestCase(NaiveConstructAndSendTestCase):
         for i in range(count):
             yield ip.IPPrefix( (i, 32), addressfamily=ip.AFI_INET )
 
-    @unittest.skip("Bug: withdrawals handling is broken")
     def test_FewWithdrawals_NoUpdates(self, mock_sendMessage):
         """
         Tests Inet Unicast sending, 10 withdrawals and no updates.
@@ -726,7 +725,6 @@ class NaiveInetConstructAndSendTestCase(NaiveConstructAndSendTestCase):
         self.assertEqual(len(bgpupdate[2]), 2)
         self.assertEqual(len(bgpupdate[3]), 0)
 
-    @unittest.skip("Bug: withdrawals handling is broken")
     def test_ManyWithdrawals_NoUpdates(self, mock_sendMessage):
         """
         Tests Inet Unicast sending, 2000 withdrawals and no updates.
@@ -754,7 +752,6 @@ class NaiveInetConstructAndSendTestCase(NaiveConstructAndSendTestCase):
         self.assertEqual(len(bgpupdates[2][2]), 2)
         self.assertEqual(len(bgpupdates[2][3]), 0)
 
-    @unittest.skip("Bug: withdrawals handling is broken")
     def test_FewWithdrawals_FewUpdates_SingleMessage(self, mock_sendMessage):
         """
         Tests Inet Unicast sending, 10 withdrawals and 20 updates.
@@ -774,7 +771,6 @@ class NaiveInetConstructAndSendTestCase(NaiveConstructAndSendTestCase):
         self.assertEqual(len(bgpupdate[2]), 20)
         self.assertEqual(len(bgpupdate[3]), 100)
 
-    @unittest.skip("Bug: withdrawals handling is broken")
     def test_ManyWithdrawals_FewUpdates_TwoMessages(self, mock_sendMessage):
         """
         Tests Inet Unicast sending, enough withdrawals to just fill a single
@@ -817,7 +813,6 @@ class NaiveInetConstructAndSendTestCase(NaiveConstructAndSendTestCase):
         self.assertEqual(len(bgpupdate[2]), 20)
         self.assertEqual(len(bgpupdate[3]), 100)
 
-    @unittest.skip("Bug: withdrawals handling is broken")
     def test_ManyWithdrawals_ManyUpdates(self, mock_sendMessage):
         """
         Tests Inet Unicast sending, enough withdrawals and updates to fill

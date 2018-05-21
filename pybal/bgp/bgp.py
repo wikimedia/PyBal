@@ -1248,17 +1248,23 @@ class NaiveBGPPeering(BGPPeering):
         - attributeMap: a dict of FrozenAttributeDict to updates sets
         """
 
+        # If attributeMap is empty, i.e there are no UPDATEs,
+        # create an entry with no attributes to be used for withdrawals only
+        if not attributeMap:
+            attributeMap[FrozenAttributeDict([])] = set()
+
+        withdrawalPrefixSet = {w.prefix for w in withdrawals}
+
         for attributes, advertisements in attributeMap.iteritems():
-            withdrawalPrefixSet = {w.prefix for w in withdrawals}
             adPrefixSet = {ad.prefix for ad in advertisements}
 
             bgpupdate = BGPUpdateMessage()
             # Start with withdrawals, if there are any
-            while len(withdrawals) > 0:
+            while withdrawalPrefixSet:
                 prefixesAdded = bgpupdate.addSomeWithdrawals(withdrawalPrefixSet)
                 if prefixesAdded == 0:
                     raise ValueError("Could not add any withdrawals")
-                if len(withdrawals) > 0:
+                if withdrawalPrefixSet:
                     # We overflowed the packet
                     self.estabProtocol.sendMessage(bgpupdate)
                     bgpupdate = BGPUpdateMessage()
@@ -1282,7 +1288,7 @@ class NaiveBGPPeering(BGPPeering):
                 self.estabProtocol.sendMessage(bgpupdate)
 
             # Start with a clean slate
-            while len(adPrefixSet) > 0:
+            while adPrefixSet:
                 bgpupdate = BGPUpdateMessage()
                 # For inet-unicast, we need to add the complete set of
                 # attributes to every packet.
@@ -1297,6 +1303,8 @@ class NaiveBGPPeering(BGPPeering):
                     if prefixesAdded == 0:
                         raise ValueError("Could not add any NLRI prefixes")
                     self.estabProtocol.sendMessage(bgpupdate)
+
+        assert not withdrawalPrefixSet
 
     def _sendMPUpdates(self, addressfamily, withdrawals, attributeMap):
         """
