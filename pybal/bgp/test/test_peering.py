@@ -585,6 +585,21 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
             (AFI_INET6, SAFI_UNICAST): set()
         }
 
+    @mock.patch.object(BGPPeering, 'completeInit')
+    def testCompleteInit(self, mock_completeInit):
+        self.peering.completeInit(self.peering.estabProtocol)
+
+        mock_completeInit.assert_called_with(self.peering, self.peering.estabProtocol)
+        self.assertFalse(self.peering.advertised)
+
+    def testSendAdvertisements(self):
+        with mock.patch.object(self.peering, '_sendUpdates') as mock_sendUpdates:
+            self.peering.sendAdvertisements()
+        # Test whether existing advertisements are withdrawn, outstanding
+        # advertisements are announced
+        mock_sendUpdates.assert_called_with(
+            self.peering.advertised, self.peering.toAdvertise)
+
     def testSetAdvertisements(self):
         self.assertEqual(self.peering.toAdvertise, self.emptyAFs)
 
@@ -600,17 +615,16 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
 
         self.peering.setAdvertisements({ adv_v4 })
 
-        self.assertEqual(self.peering.advertised, {
+        self.assertEqual(self.peering.toAdvertise, {
             (AFI_INET, SAFI_UNICAST): { adv_v4 },
             (AFI_INET6, SAFI_UNICAST): set()
         })
+        self.assertEqual(self.peering.advertised, self.peering.toAdvertise)
 
         self.peering.setAdvertisements(set())
 
-        self.assertEqual(self.peering.advertised, {
-            (AFI_INET, SAFI_UNICAST): set(),
-            (AFI_INET6, SAFI_UNICAST): set()
-        })
+        self.assertEqual(self.peering.advertised, self.emptyAFs)
+        self.assertEqual(self.peering.advertised, self.peering.toAdvertise)
 
     def testSetV6Advertisements(self):
         nlri = attributes.MPReachNLRIAttribute((AFI_INET6, SAFI_UNICAST,
@@ -625,11 +639,14 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
 
         self.peering.setAdvertisements({ adv_v6 })
 
-        self.assertEqual(self.peering.advertised, {
+        self.assertEqual(self.peering.toAdvertise, {
             (AFI_INET, SAFI_UNICAST): set(),
             (AFI_INET6, SAFI_UNICAST): { adv_v6 }
         })
+        self.assertEqual(self.peering.advertised, self.peering.toAdvertise)
 
         self.peering.setAdvertisements(set())
 
         self.assertEqual(self.peering.advertised, self.emptyAFs)
+        self.assertEqual(self.peering.toAdvertise, self.emptyAFs)
+        self.assertEqual(self.peering.advertised, self.peering.toAdvertise)
