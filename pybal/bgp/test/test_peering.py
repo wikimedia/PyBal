@@ -19,14 +19,15 @@ import twisted.test.proto_helpers
 # BGP imports
 from ..bgp import BGP
 from ..bgp import BGPFactory, BGPServerFactory, BGPPeering
-from .. import constants, fsm, exceptions, bgp, attributes, ip
+from ..constants import *
+from .. import fsm, exceptions, bgp, attributes, ip
 
 
 class BGPFactoryTestCase(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(BGPFactoryTestCase, self).__init__(*args, **kwargs)
         self.testASN = 64600
-        self.testAddr = IPv4Address('TCP', '127.0.0.2', constants.PORT)
+        self.testAddr = IPv4Address('TCP', '127.0.0.2', PORT)
 
     def setUp(self):
         self.factory = BGPFactory()
@@ -69,7 +70,7 @@ class BGPServerFactoryTestCase(BGPFactoryTestCase):
         Tests whether the incoming connection gets rejected for unknown peers
         """
 
-        unknownAddr = IPv4Address('TCP', '127.0.0.99', constants.PORT)
+        unknownAddr = IPv4Address('TCP', '127.0.0.99', PORT)
         p = self.factory.buildProtocol(unknownAddr)
         self.assertIsNone(p)
 
@@ -387,15 +388,15 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
 
     def testSetEnabledAddressFamilies(self):
         af = {
-            (constants.AFI_INET, constants.SAFI_UNICAST),
-            (constants.AFI_INET, constants.SAFI_MULTICAST),
-            (constants.AFI_INET6, constants.SAFI_UNICAST),
-            (constants.AFI_INET6, constants.SAFI_MULTICAST)
+            (AFI_INET, SAFI_UNICAST),
+            (AFI_INET, SAFI_MULTICAST),
+            (AFI_INET6, SAFI_UNICAST),
+            (AFI_INET6, SAFI_MULTICAST)
         }
         self.factory.setEnabledAddressFamilies(af)
 
         # Test with unknown AF
-        af.add((66, constants.SAFI_UNICAST))
+        af.add((66, SAFI_UNICAST))
         with self.assertRaises(ValueError):
             self.factory.setEnabledAddressFamilies(af)
 
@@ -414,8 +415,8 @@ class PeeringSessionToOpenSentTestCase(unittest.TestCase):
 
     def setUp(self):
         self.myASN = 64601
-        self.peerAddr =  IPv4Address('TCP', '127.0.0.1', constants.PORT)
-        self.enabledAddressFamilies = {(constants.AFI_INET, constants.SAFI_UNICAST)}
+        self.peerAddr =  IPv4Address('TCP', '127.0.0.1', PORT)
+        self.enabledAddressFamilies = {(AFI_INET, SAFI_UNICAST)}
 
     def tearDown(self):
         # The BGPPeering factory keeps its own separate FSM
@@ -513,7 +514,7 @@ class PeeringServerSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
     def setUp(self):
         super(PeeringServerSessionToOpenSentTestCase, self).setUp()
         # Set a high (client) port for peerAddr
-        self.peerAddr.port = 1000 + constants.PORT
+        self.peerAddr.port = 1000 + PORT
 
     def _setupPeering(self):
         super(PeeringServerSessionToOpenSentTestCase, self)._setupPeering()
@@ -562,51 +563,73 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
 
     def setUp(self):
         self.peering = bgp.NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
-        self.peering.addressFamilies = set([(1, 1), (2, 1)])
+        self.peering.setEnabledAddressFamilies({
+            (AFI_INET, SAFI_UNICAST),
+            (AFI_INET6, SAFI_UNICAST)})
         self.peering.fsm.state = fsm.ST_ESTABLISHED
 
         proto = bgp.BGP()
         proto.transport = twisted.test.proto_helpers.StringTransportWithDisconnection()
         self.peering.estabProtocol = proto
 
-        self.peering.toAdvertise = {(1, 1): set([]),
-                                    (2, 1): set([])}
+        self.peering.setAdvertisements(set())
 
         med = attributes.MEDAttribute(50)
         aspath = attributes.ASPathAttribute([(2, [64496])])
         origin = attributes.OriginAttribute((0))
 
-        self.attrs = {
-            attributes.MEDAttribute: med,
-            attributes.ASPathAttribute: aspath,
-            attributes.OriginAttribute: origin,
+        self.attrs = attributes.AttributeDict({med, aspath, origin})
+
+        self.emptyAFs = {
+            (AFI_INET, SAFI_UNICAST): set(),
+            (AFI_INET6, SAFI_UNICAST): set()
         }
+
+    def testSetAdvertisements(self):
+        self.assertEqual(self.peering.toAdvertise, self.emptyAFs)
 
     def testSetV4Advertisements(self):
         nexthop = attributes.NextHopAttribute('10.192.16.139')
 
         self.attrs[attributes.NextHopAttribute] = nexthop
 
-        adv_v4 = bgp.Advertisement(prefix=ip.IPv4IP('10.2.1.18'),
-                                   attributes=self.attrs,
-                                   addressfamily=(1, 1))
+        adv_v4 = bgp.Advertisement(
+            prefix=ip.IPv4IP('10.2.1.18'),
+            attributes=attributes.FrozenAttributeDict(self.attrs),
+            addressfamily=(AFI_INET, SAFI_UNICAST))
 
-        self.peering.advertised = { (1, 1): set([ adv_v4 ]),
-                                    (2, 1): set([]) }
+        self.peering.setAdvertisements({ adv_v4 })
+
+        self.assertEqual(self.peering.advertised, {
+            (AFI_INET, SAFI_UNICAST): { adv_v4 },
+            (AFI_INET6, SAFI_UNICAST): set()
+        })
 
         self.peering.setAdvertisements(set())
 
+        self.assertEqual(self.peering.advertised, {
+            (AFI_INET, SAFI_UNICAST): set(),
+            (AFI_INET6, SAFI_UNICAST): set()
+        })
+
     def testSetV6Advertisements(self):
-        nlri = attributes.MPReachNLRIAttribute((constants.AFI_INET6, constants.SAFI_UNICAST,
+        nlri = attributes.MPReachNLRIAttribute((AFI_INET6, SAFI_UNICAST,
             ip.IPv6IP('2620:0:860:101:10:192:1:3'), []))
 
         self.attrs[attributes.MPReachNLRIAttribute] = nlri
 
-        adv_v6 = bgp.Advertisement(prefix=ip.IPv6IP('2620:0:860:ed1a:0:0:0:1'),
-                                   attributes=self.attrs,
-                                   addressfamily=(2, 1))
+        adv_v6 = bgp.Advertisement(
+            prefix=ip.IPv6IP('2620:0:860:ed1a:0:0:0:1'),
+            attributes=attributes.FrozenAttributeDict(self.attrs),
+            addressfamily=(AFI_INET6, SAFI_UNICAST))
 
-        self.peering.advertised = { (1, 1): set([]),
-                                    (2, 1): set([ adv_v6 ]) }
+        self.peering.setAdvertisements({ adv_v6 })
+
+        self.assertEqual(self.peering.advertised, {
+            (AFI_INET, SAFI_UNICAST): set(),
+            (AFI_INET6, SAFI_UNICAST): { adv_v6 }
+        })
 
         self.peering.setAdvertisements(set())
+
+        self.assertEqual(self.peering.advertised, self.emptyAFs)
