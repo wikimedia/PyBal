@@ -8,9 +8,11 @@ Monitor class implementations for PyBal
 from pybal import monitor, util
 from pybal.metrics import Gauge
 
-from twisted.internet import reactor, defer
+from twisted.internet import defer
 from twisted.web import client
 from twisted.python.runtime import seconds
+import twisted.internet.reactor
+
 import logging, random
 
 log = util.log
@@ -64,11 +66,15 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
             **metric_keywords)
     }
 
-    def __init__(self, coordinator, server, configuration={}):
+    def __init__(self, coordinator, server, configuration={}, reactor=None):
         """Constructor"""
 
         # Call ancestor constructor
-        super(ProxyFetchMonitoringProtocol, self).__init__(coordinator, server, configuration)
+        super(ProxyFetchMonitoringProtocol, self).__init__(
+            coordinator,
+            server,
+            configuration,
+            reactor=reactor)
 
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toGET = self._getConfigInt('timeout', self.TIMEOUT_GET)
@@ -88,7 +94,7 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         super(ProxyFetchMonitoringProtocol, self).run()
 
         if not self.checkCall or not self.checkCall.active():
-            self.checkCall = reactor.callLater(self.intvCheck, self.check)
+            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
 
     def stop(self):
         """Stop all running and/or upcoming checks"""
@@ -121,7 +127,8 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
             port=self.server.port,
             status=self.expectedStatus,
             timeout=self.toGET,
-            followRedirect=False
+            followRedirect=False,
+            reactor=self.reactor
         ).addCallbacks(
             self._fetchSuccessful,
             self._fetchFailed
@@ -171,12 +178,13 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
 
         # Schedule the next check
         if self.active:
-            self.checkCall = reactor.callLater(self.intvCheck, self.check)
+            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
 
         return result
 
+    @staticmethod
     def getProxyPage(url, contextFactory=None, host=None, port=None,
-                     status=None, *args, **kwargs):
+                     status=None, reactor=twisted.internet.reactor, *args, **kwargs):
         """Download a web page as a string. (modified from twisted.web.client.getPage)
 
         Download a page. Return a deferred, which will callback with a
@@ -200,4 +208,3 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         else:
             reactor.connectTCP(host, port, factory)
         return factory.deferred
-    getProxyPage = staticmethod(getProxyPage)

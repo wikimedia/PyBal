@@ -12,8 +12,9 @@ from pybal.metrics import Gauge
 import os, sys, signal, errno
 import logging
 
-from twisted.internet import reactor, process, error
+from twisted.internet import process, error
 from twisted.python.runtime import seconds
+import twisted.internet.reactor
 
 class ProcessGroupProcess(process.Process, object):
     """
@@ -42,7 +43,7 @@ class ProcessGroupProcess(process.Process, object):
         super(ProcessGroupProcess, self)._fork(path, uid, gid, executable, args, environment, **kwargs)
         # In case we set timeouts, just respect them.
         if self.timeout:
-            self.timeoutCall = reactor.callLater(self.timeout, self._processTimeout)
+            self.timeoutCall = self.reactor.callLater(self.timeout, self._processTimeout)
 
     def processEnded(self, status):
         if self.timeoutCall:
@@ -105,11 +106,15 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
             **metric_keywords)
     }
 
-    def __init__(self, coordinator, server, configuration={}):
+    def __init__(self, coordinator, server, configuration={}, reactor=None):
         """Constructor"""
 
         # Call ancestor constructor
-        super(RunCommandMonitoringProtocol, self).__init__(coordinator, server, configuration)
+        super(RunCommandMonitoringProtocol, self).__init__(
+            coordinator,
+            server,
+            configuration,
+            reactor)
 
         locals = {  'server':   server
         }
@@ -135,7 +140,7 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         super(RunCommandMonitoringProtocol, self).run()
 
         if not self.checkCall or not self.checkCall.active():
-            self.checkCall = reactor.callLater(self.intvCheck, self.runCommand)
+            self.checkCall = self.reactor.callLater(self.intvCheck, self.runCommand)
 
     def stop(self):
         """Stop all running and/or upcoming checks"""
@@ -200,7 +205,7 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
 
         # Schedule the next check
         if self.active:
-            self.checkCall = reactor.callLater(self.intvCheck, self.runCommand)
+            self.checkCall = self.reactor.callLater(self.intvCheck, self.runCommand)
 
         reason.trap(error.ProcessDone, error.ProcessTerminated)
 
@@ -227,7 +232,9 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         non-POSIX platforms and PTYs removed.
         """
 
-        args, env = reactor._checkProcessArgs(args, env)
-        return ProcessGroupProcess(reactor, executable, args, env, path,
+        # Use the default reactor instead of self.reactor as not all (testing)
+        # reactors provide _checkProcessArgs, and it's harmless anyway.
+        args, env = twisted.internet.reactor._checkProcessArgs(args, env)
+        return ProcessGroupProcess(self.reactor, executable, args, env, path,
                                processProtocol, uid, gid, childFDs,
                                sessionLeader, timeout)

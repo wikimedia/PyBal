@@ -8,7 +8,7 @@ DNS Monitor class implementation for PyBal
 from pybal import monitor
 from pybal.metrics import Gauge
 
-from twisted.internet import reactor, defer
+from twisted.internet import defer
 from twisted.names import client, dns, error
 from twisted.python import runtime
 import logging
@@ -44,11 +44,15 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
             **metric_keywords)
     }
 
-    def __init__(self, coordinator, server, configuration):
+    def __init__(self, coordinator, server, configuration, reactor=None):
         """Constructor"""
 
         # Call ancestor constructor
-        super(DNSQueryMonitoringProtocol, self).__init__(coordinator, server, configuration)
+        super(DNSQueryMonitoringProtocol, self).__init__(
+            coordinator,
+            server,
+            configuration,
+            reactor=reactor)
 
         self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toQuery = self._getConfigInt('timeout', self.TIMEOUT_QUERY)
@@ -71,7 +75,7 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         self.resolver = client.createResolver([(ip, 53) for ip in self.server.ip4_addresses])
 
         if not self.checkCall or not self.checkCall.active():
-            self.checkCall = reactor.callLater(self.intvCheck, self.check)
+            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
 
     def stop(self):
         """Stop the monitoring"""
@@ -173,6 +177,6 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
 
         # Schedule the next check
         if self.active:
-            self.checkCall = reactor.callLater(self.intvCheck, self.check)
+            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
 
         return result

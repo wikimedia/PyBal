@@ -4,7 +4,9 @@ Copyright (C) 2006-2014 by Mark Bergsma <mark@nedworks.org>
 
 Monitor class implementations for PyBal
 """
-from twisted.internet import reactor
+
+import twisted.internet.reactor
+
 from . import util
 import logging
 from pybal.metrics import Counter, Gauge
@@ -35,14 +37,14 @@ class MonitoringProtocol(object):
         'status': Gauge('status', 'Monitor up status', **metric_keywords)
     }
 
-    def __init__(self, coordinator, server, configuration={}, reactor=reactor):
+    def __init__(self, coordinator, server, configuration={}, reactor=None):
         """Constructor"""
 
         self.coordinator = coordinator
         self.server = server
         self.configuration = configuration
         self.up = None    # None, False (Down) or True (Up)
-        self.reactor = reactor
+        self.reactor = reactor or twisted.internet.reactor
 
         self.active = False
         self.firstCheck = True

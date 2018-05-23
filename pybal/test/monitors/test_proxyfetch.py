@@ -90,16 +90,7 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         m_checkCall.cancel.assert_called()
         m_getPageDeferred.cancel.assert_called()
 
-    def testCheckInterval(self):
-        with mock.patch('pybal.monitors.proxyfetch.reactor', new_callable=task.Clock) as reactor:
-            with mock.patch.object(self.monitor, 'check') as mock_check:
-                self.monitor.run()
-        reactor.advance(self.monitor.intvCheck / 2)
-        mock_check.assert_not_called()
-        reactor.advance(self.monitor.intvCheck / 2)
-        mock_check.assert_called_once()
-
-    @mock.patch('pybal.monitors.proxyfetch.reactor',
+    @mock.patch('twisted.internet.reactor',
         new_callable=twisted.test.proto_helpers.MemoryReactor)
     def testCheck(self, mock_reactor):
         startSeconds = seconds()
@@ -131,7 +122,7 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         mocks['_fetchFailed'].assert_not_called()
         mocks['_checkFinished'].assert_called()
 
-    @mock.patch('pybal.monitors.proxyfetch.reactor',
+    @mock.patch('twisted.internet.reactor',
         new_callable=twisted.test.proto_helpers.MemoryReactor)
     def testCheckFailure(self, mock_reactor):
         self.monitor.active = True
