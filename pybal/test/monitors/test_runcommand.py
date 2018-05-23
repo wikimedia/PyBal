@@ -62,14 +62,10 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
             self.coordinator, self.server, self.config)
         self.assertEquals(monitor.arguments, [""])
 
-    @mock.patch.object(twisted.internet.reactor, 'callLater')
-    def testRun(self, mock_callLater):
-        mock_DC = mock.Mock(spec=twisted.internet.base.DelayedCall)
-        mock_callLater.return_value = mock_DC
-        super(RunCommandMonitoringProtocolTestCase, self).testRun()
-        self.assertCheckScheduled(mock_callLater, mock_DC, self.monitor.runCommand)
-        # Don't upset self.tearDown
-        self.monitor.checkCall = None
+    def testRun(self):
+        with mock.patch.object(self.monitor, 'runCommand') as mock_runCommand:
+            super(RunCommandMonitoringProtocolTestCase, self).testRun()
+        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_runCommand)
 
     def testStop(self):
         self.monitor.runningProcess = mock.Mock(spec=ProcessGroupProcess)
@@ -128,12 +124,11 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         with mock.patch.multiple(self.monitor,
                                  _resultUp=mock.DEFAULT,
                                  _resultDown=mock.DEFAULT,
-                                 reactor=mock.DEFAULT) as mocks:
+                                 runCommand=mock.DEFAULT) as mocks:
             self.monitor.processEnded(reason)
         mocks['_resultUp'].assert_called()
         mocks['_resultDown'].assert_not_called()
-        mocks['reactor'].callLater.assert_called_with(
-            self.monitor.intvCheck, self.monitor.runCommand)
+        self.assertDelayedCallInvoked(self.monitor.checkCall, mocks['runCommand'])
 
     def testProcessEndedProcessTerminated(self):
         """Assert that an unclean (non-zero) exit reports the monitor as down"""
@@ -144,12 +139,11 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         with mock.patch.multiple(self.monitor,
                                  _resultUp=mock.DEFAULT,
                                  _resultDown=mock.DEFAULT,
-                                 reactor=mock.DEFAULT) as mocks:
+                                 runCommand=mock.DEFAULT) as mocks:
             self.monitor.processEnded(reason)
         mocks['_resultDown'].assert_called()
         mocks['_resultUp'].assert_not_called()
-        mocks['reactor'].callLater.assert_called_with(
-            self.monitor.intvCheck, self.monitor.runCommand)
+        self.assertDelayedCallInvoked(self.monitor.checkCall, mocks['runCommand'])
 
     def testProcessEndedProcessUnknownError(self):
         """Assert that any other (unknown) error also reports the monitor as down"""
@@ -160,12 +154,14 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         with mock.patch.multiple(self.monitor,
                                  _resultUp=mock.DEFAULT,
                                  _resultDown=mock.DEFAULT,
-                                 reactor=mock.DEFAULT) as mocks:
+                                 runCommand=mock.DEFAULT) as mocks:
             with self.assertRaises((failure.Failure, reason.type)):
                 self.monitor.processEnded(reason)
         mocks['_resultDown'].assert_not_called()
         mocks['_resultUp'].assert_not_called()
-        mocks['reactor'].callLater.assert_not_called()
+        self.assertIsNone(self.monitor.checkCall)
+        self.reactor.advance(self.monitor.intvCheck)
+        mocks['runCommand'].assert_not_called()
 
     def testLeftoverProcesses(self):
         """Assert that leftoverProcesses has different output for the two cases"""

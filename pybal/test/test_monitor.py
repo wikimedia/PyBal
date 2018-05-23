@@ -10,7 +10,8 @@ import unittest, mock
 
 import pybal.monitor
 import pybal.util
-import twisted.internet
+
+import twisted.test.proto_helpers
 
 from .fixtures import PyBalTestCase
 
@@ -27,21 +28,28 @@ class BaseMonitoringProtocolTestCase(PyBalTestCase):
         super(BaseMonitoringProtocolTestCase, self).setUp()
         self.monitor = self.monitorClass(
             self.coordinator, self.server, self.config)
-        self.monitor.reactor = twisted.internet.reactor
+        self.monitor.reactor = self.reactor
 
     def tearDown(self):
         if self.monitor.active:
             self.monitor.stop()
 
-    def assertCheckScheduled(self, mock_callLater, mock_DC, checkMethod=None):
+    def assertDelayedCallInvoked(self, delayedCall, mockedMethod, reactor=None, interval=None):
         """
-        Tests whether a new check has been scheduled using reactor.mock_callLater
-        Requires mocked callLater and DelayedCall as arguments
+        Tests whether a reactor.callLater scheduled call is actually invoked.
+        Requires reactor to be an instance of task.Clock
         """
 
-        self.assertIs(self.monitor.checkCall, mock_DC)
-        mock_callLater.assert_called_with(self.monitor.intvCheck,
-            checkMethod or self.monitor.check)
+        reactor = reactor or self.reactor
+        if interval is None:
+            interval = delayedCall.getTime() - delayedCall.seconds()
+
+        self.assertTrue(delayedCall.active())
+        reactor.advance(interval / 2)
+        mockedMethod.assert_not_called()
+        reactor.advance(interval / 2)
+        self.assertFalse(delayedCall.active())
+        mockedMethod.assert_called_once()
 
     def testRun(self):
         self.monitor.run()
@@ -68,19 +76,39 @@ class MonitoringProtocolTestCase(PyBalTestCase):
     def setUp(self):
         super(MonitoringProtocolTestCase, self).setUp()
         self.monitor = pybal.monitor.MonitoringProtocol(
-            self.coordinator, self.server, self.config)
+            self.coordinator,
+            self.server,
+            self.config,
+            reactor=self.reactor)
         self.monitor.__name__ = 'TestMonitor'
-        self.reactor = twisted.internet.reactor
+
+    def testReactor(self):
+        self.assertIs(self.monitor.reactor, self.reactor)
+
+        monitor = pybal.monitor.MonitoringProtocol(
+            self.coordinator,
+            self.server,
+            self.config,
+            reactor=mock.sentinel.reactor
+        )
+        self.assertIs(monitor.reactor, mock.sentinel.reactor)
+
+        monitor = pybal.monitor.MonitoringProtocol(
+            self.coordinator,
+            self.server,
+            self.config
+        )
+        self.assertIs(monitor.reactor, twisted.internet.reactor)
+
 
     def testRun(self):
         """Test `MonitoringProtocol.run`."""
         self.assertIsNone(self.monitor._shutdownTriggerID)
 
-        with mock.patch.object(self.monitor.reactor, 'addSystemEventTrigger') as mock_ASET:
-            self.monitor.run()
+        self.monitor.run()
         self.assertTrue(self.monitor.active)
-        mock_ASET.assert_called_with('before', 'shutdown', self.monitor.stop)
-        self.assertIsNotNone(self.monitor._shutdownTriggerID)
+        self.assertIn((self.monitor.stop, (), {}),
+                      self.monitor.reactor.triggers['before']['shutdown'])
 
         with self.assertRaises(AssertionError):
             self.monitor.run()
@@ -88,16 +116,12 @@ class MonitoringProtocolTestCase(PyBalTestCase):
     def testStop(self):
         """Test `MonitoringProtocol.stop`."""
         self.monitor.run()
-        self.assertIsNotNone(self.monitor._shutdownTriggerID)
-        self.monitor.stop()
+        self.monitor._shutdownTriggerID = mock.sentinel.shutdownTriggerID
+        with mock.patch.object(self.monitor.reactor,
+            'removeSystemEventTrigger') as mock_rSET:
+            self.monitor.stop()
         self.assertFalse(self.monitor.active)
-        self.assertIsNone(self.monitor._shutdownTriggerID)
-
-    def testStopBeforeShutdown(self):
-        """`MonitoringProtocol` stops on system shutdown."""
-        self.monitor.run()
-        self.reactor.fireSystemEvent('shutdown')
-        self.assertFalse(self.monitor.active)
+        mock_rSET.assert_called_once_with(mock.sentinel.shutdownTriggerID)
 
     def testName(self):
         """Test `MonitoringProtocol._resultUp`."""

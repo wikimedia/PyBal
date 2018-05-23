@@ -127,4 +127,4 @@ class PyBalTestCase(twisted.trial.unittest.TestCase):
         self.lvsservice = StubLVSService(self.name, service_def, self.config)
         self.server = ServerStub(self.host, self.ip, self.port,
                                  lvsservice=self.lvsservice)
-        self.reactor = twisted.test.proto_helpers.MemoryReactor()
+        self.reactor = twisted.test.proto_helpers.MemoryReactorClock()

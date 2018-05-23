@@ -49,25 +49,18 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         with self.assertRaises(Exception):
             monitor = ProxyFetchMonitoringProtocol(None, self.server, self.config)
 
-    @mock.patch.object(reactor, 'callLater')
-    def testRun(self, mock_callLater):
-        mock_DC = mock.Mock(spec=twisted.internet.base.DelayedCall)
-        mock_callLater.return_value = mock_DC
-        super(ProxyFetchMonitoringProtocolTestCase, self).testRun()
-        self.assertCheckScheduled(mock_callLater, mock_DC)
-        # Don't upset self.tearDown
-        self.monitor.checkCall = None
+    def testRun(self):
+        with mock.patch.object(self.monitor, 'check') as mock_check:
+            super(ProxyFetchMonitoringProtocolTestCase, self).testRun()
+        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
 
-    @mock.patch.object(reactor, 'callLater')
-    def testRunAlreadyActive(self, mock_callLater):
-        mock_DC = mock.Mock(spec=twisted.internet.base.DelayedCall)
-        mock_DC.active.return_value = True
-        mock_callLater.return_value = mock_DC
-        super(ProxyFetchMonitoringProtocolTestCase, self).testRun()
-        # Make sure monitor.checkCall hasn't been replaced
-        self.assertEqual(self.monitor.checkCall, mock_DC)
-        # Don't upset self.tearDown
-        self.monitor.checkCall = None
+    def testRunAlreadyActive(self):
+        self.monitor.checkCall = self.monitor.reactor.callLater(1, lambda: None)
+        callTime = self.monitor.checkCall.getTime()
+        self.assertTrue(self.monitor.checkCall.active())
+        with mock.patch.object(self.monitor, 'check') as mock_check:
+            super(ProxyFetchMonitoringProtocolTestCase, self).testRun()
+        self.assertEqual(self.monitor.checkCall.getTime(), callTime)
 
     @mock.patch.object(reactor, 'callLater')
     def testStopCallsCancelled(self, mock_callLater):
@@ -81,9 +74,7 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         m_checkCall.cancel.assert_called()
         m_getPageDeferred.cancel.assert_called()
 
-    @mock.patch('twisted.internet.reactor',
-        new_callable=twisted.test.proto_helpers.MemoryReactor)
-    def testCheck(self, mock_reactor):
+    def testCheck(self):
         startSeconds = seconds()
         self.monitor.active = True
         with mock.patch.multiple(self.monitor,
@@ -113,9 +104,7 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         mocks['_fetchFailed'].assert_not_called()
         mocks['_checkFinished'].assert_called()
 
-    @mock.patch('twisted.internet.reactor',
-        new_callable=twisted.test.proto_helpers.MemoryReactor)
-    def testCheckFailure(self, mock_reactor):
+    def testCheckFailure(self):
         self.monitor.active = True
         with mock.patch.multiple(self.monitor,
                                  getProxyPage=mock.DEFAULT,
@@ -178,38 +167,34 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         mock_resultDown.assert_called_once()
         testFailure.trap(testFailure.type)
 
-    @mock.patch.object(reactor, 'callLater')
-    def testCheckFinished(self, mock_callLater):
+    def testCheckFinished(self):
         self.monitor.active = True
         testResult = "Test page result"
-        mock_DC = mock.Mock(spec=twisted.internet.base.DelayedCall)
-        mock_callLater.return_value = mock_DC
 
-        r = self.monitor._checkFinished(testResult)
+        with mock.patch.object(self.monitor, 'check') as mock_check:
+            r = self.monitor._checkFinished(testResult)
 
         self.assertIs(r, testResult)
         self.assertIsNone(self.monitor.checkStartTime)
-        self.assertCheckScheduled(mock_callLater, mock_DC)
+        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
 
-    @mock.patch.object(reactor, 'callLater')
-    def testCheckFinishedNotActive(self, mock_callLater):
+    def testCheckFinishedNotActive(self):
         self.monitor.active = False
+        self.assertIsNone(self.monitor.checkCall)
         testResult = "Test page result"
         self.monitor._checkFinished(testResult)
-        mock_callLater.ensure_not_called()
+        self.assertIsNone(self.monitor.checkCall)
 
-    @mock.patch.object(reactor, 'callLater')
-    def testCheckFinishedFailure(self, mock_callLater):
+    def testCheckFinishedFailure(self):
         self.monitor.active = True
         testFailure = twisted.internet.error.ConnectError("Testing a connect error")
-        mock_DC = mock.Mock(spec=twisted.internet.base.DelayedCall)
-        mock_callLater.return_value = mock_DC
 
-        r = self.monitor._checkFinished(testFailure)
+        with mock.patch.object(self.monitor, 'check') as mock_check:
+            r = self.monitor._checkFinished(testFailure)
 
         self.assertIs(r, testFailure)
         self.assertIsNone(self.monitor.checkStartTime)
-        self.assertCheckScheduled(mock_callLater, mock_DC)
+        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
 
     @mock.patch.object(reactor, 'connectTCP')
     def testGetProxyPageHTTP(self, mock_connectTCP):
