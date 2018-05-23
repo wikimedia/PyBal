@@ -196,48 +196,58 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         self.assertIsNone(self.monitor.checkStartTime)
         self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
 
-    @mock.patch.object(reactor, 'connectTCP')
-    def testGetProxyPageHTTP(self, mock_connectTCP):
+    def testGetProxyPageHTTP(self):
         testURL = "http://en.wikipedia.org/"
         host = "cp1001.eqiad.wmnet"
         port = 80
-        r = ProxyFetchMonitoringProtocol.getProxyPage(testURL, host=host, port=port)
+        r = ProxyFetchMonitoringProtocol.getProxyPage(
+            testURL,
+            host=host,
+            port=port,
+            reactor=self.reactor)
         self.assertIsInstance(r, defer.Deferred)
         # Test whether connectTCP has been called with at least
         # host and port args and the correct factory
-        mock_connectTCP.assert_called_once()
-        self.assertEqual(mock_connectTCP.call_args[0][:2], (host, port))
-        self.assertIsInstance(mock_connectTCP.call_args[0][2],
-                              twisted.web.client.HTTPClientFactory)
+        self.assertEqual(len(self.reactor.tcpClients), 1)
+        tcpClient = self.reactor.tcpClients[0]
+        self.assertEqual(tcpClient[:2], (host, port))
+        self.assertIsInstance(tcpClient[2], twisted.web.client.HTTPClientFactory)
+        self.assertEqual(tcpClient[2].url, testURL)
 
-    @mock.patch.object(reactor, 'connectTCP')
-    def testGetProxyPageRedir(self, mock_connectTCP):
+    def testGetProxyPageRedir(self):
         testURL = "http://en.wikipedia.org/"
         host = "cp1001.eqiad.wmnet"
         port = 80
         r = ProxyFetchMonitoringProtocol.getProxyPage(testURL,
-            host=host, port=port, status=301)
+            host=host,
+            port=port,
+            status=301,
+            reactor=self.reactor)
         self.assertIsInstance(r, defer.Deferred)
         # Test whether connectTCP has been called with at least
         # host and port args and the correct factory
-        mock_connectTCP.assert_called_once()
-        self.assertEqual(mock_connectTCP.call_args[0][:2], (host, port))
-        self.assertIsInstance(mock_connectTCP.call_args[0][2],
-                              pybal.monitors.proxyfetch.RedirHTTPClientFactory)
+        self.assertEqual(len(self.reactor.tcpClients), 1)
+        tcpClient = self.reactor.tcpClients[0]
+        self.assertEqual(tcpClient[:2], (host, port))
+        self.assertIsInstance(tcpClient[2], pybal.monitors.proxyfetch.RedirHTTPClientFactory)
+        self.assertEqual(tcpClient[2].url, testURL)
 
-    @mock.patch.object(reactor, 'connectSSL')
-    def testGetProxyPageHTTPS(self, mock_connectSSL):
+    def testGetProxyPageHTTPS(self):
         testURL = "https://en.wikipedia.org/"
         host = "cp1001.eqiad.wmnet"
         port = 80
-        r = ProxyFetchMonitoringProtocol.getProxyPage(testURL, host=host, port=port)
+        r = ProxyFetchMonitoringProtocol.getProxyPage(testURL,
+            host=host,
+            port=port,
+            reactor=self.reactor)
         self.assertIsInstance(r, defer.Deferred)
         # Test whether connectTCP has been called with at least
         # host and port args and the correct factory
-        mock_connectSSL.assert_called_once()
-        self.assertEqual(mock_connectSSL.call_args[0][:2], (host, port))
-        self.assertIsInstance(mock_connectSSL.call_args[0][2],
-                              twisted.web.client.HTTPClientFactory)
+        self.assertEqual(len(self.reactor.sslClients), 1)
+        sslClient = self.reactor.sslClients[0]
+        self.assertEqual(sslClient[:2], (host, port))
+        self.assertIsInstance(sslClient[2], twisted.web.client.HTTPClientFactory)
+        self.assertEqual(sslClient[2].url, testURL)
 
 
 class RedirHTTPPageGetterTestCase(unittest.TestCase):
