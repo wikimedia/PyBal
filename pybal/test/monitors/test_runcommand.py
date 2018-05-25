@@ -6,6 +6,18 @@
   This module contains tests for `pybal.monitors.runcommand`.
 """
 
+# Python imports
+import unittest, mock
+import signal, errno
+
+# Twisted imports
+import twisted.internet.process
+import twisted.internet.base
+import twisted.internet.task
+import twisted.internet.error
+import twisted.internet.defer
+from twisted.python import runtime, failure
+
 # Testing imports
 from .. import test_monitor
 
@@ -13,19 +25,8 @@ from .. import test_monitor
 import pybal.monitor
 from pybal.monitors.runcommand import RunCommandMonitoringProtocol, ProcessGroupProcess
 
-# Twisted imports
-import twisted.internet.process
-import twisted.internet.base
-import twisted.internet.task
-import twisted.internet.error
-from twisted.python import runtime, failure
 
-# Python imports
-import unittest, mock
-import signal, errno
-
-
-class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTestCase):
+class RunCommandMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.RunCommandMonitoringProtocol`."""
 
     monitorClass = RunCommandMonitoringProtocol
@@ -48,7 +49,6 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
 
         self.assertTrue(monitor.logOutput)
 
-        self.assertIsNone(monitor.checkCall)
         self.assertIsNone(monitor.runningProcess)
 
     def testInitNoArguments(self):
@@ -61,11 +61,6 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         monitor = RunCommandMonitoringProtocol(
             self.coordinator, self.server, self.config)
         self.assertEquals(monitor.arguments, [""])
-
-    def testRun(self):
-        with mock.patch.object(self.monitor, 'runCommand') as mock_runCommand:
-            super(RunCommandMonitoringProtocolTestCase, self).testRun()
-        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_runCommand)
 
     def testStop(self):
         self.monitor.runningProcess = mock.Mock(spec=ProcessGroupProcess)
@@ -82,7 +77,8 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
     @mock.patch('twisted.internet.process.Process.__init__')
     def testRunCommand(self, mock_processInit):
         startSeconds = runtime.seconds()
-        self.monitor.runCommand()
+        d = self.monitor.runCommand()
+        self.assertIsInstance(d, twisted.internet.defer.Deferred)
         self.assertGreaterEqual(self.monitor.checkStartTime, startSeconds)
 
         # Test whether a ProcessGroupProcess has been instantiated
@@ -118,50 +114,44 @@ class RunCommandMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
     def testProcessEndedProcessDone(self):
         """Assert that a clean process exit reports the monitor as up"""
 
-        self.monitor.active = True
         self.monitor.checkStartTime = runtime.seconds()
+        self.monitor.runningProcessDeferred = twisted.internet.defer.Deferred()
         reason = failure.Failure(twisted.internet.error.ProcessDone("Process ended cleanly"))
         with mock.patch.multiple(self.monitor,
                                  _resultUp=mock.DEFAULT,
-                                 _resultDown=mock.DEFAULT,
-                                 runCommand=mock.DEFAULT) as mocks:
+                                 _resultDown=mock.DEFAULT) as mocks:
             self.monitor.processEnded(reason)
         mocks['_resultUp'].assert_called()
         mocks['_resultDown'].assert_not_called()
-        self.assertDelayedCallInvoked(self.monitor.checkCall, mocks['runCommand'])
 
     def testProcessEndedProcessTerminated(self):
         """Assert that an unclean (non-zero) exit reports the monitor as down"""
 
-        self.monitor.active = True
         self.monitor.checkStartTime = runtime.seconds()
+        self.monitor.runningProcessDeferred = twisted.internet.defer.Deferred()
         reason = failure.Failure(twisted.internet.error.ProcessTerminated("Process returned error"))
         with mock.patch.multiple(self.monitor,
                                  _resultUp=mock.DEFAULT,
-                                 _resultDown=mock.DEFAULT,
-                                 runCommand=mock.DEFAULT) as mocks:
+                                 _resultDown=mock.DEFAULT) as mocks:
             self.monitor.processEnded(reason)
         mocks['_resultDown'].assert_called()
         mocks['_resultUp'].assert_not_called()
-        self.assertDelayedCallInvoked(self.monitor.checkCall, mocks['runCommand'])
 
     def testProcessEndedProcessUnknownError(self):
         """Assert that any other (unknown) error also reports the monitor as down"""
 
-        self.monitor.active = False
         self.monitor.checkStartTime = runtime.seconds()
+        self.monitor.runningProcessDeferred = twisted.internet.defer.Deferred()
         reason = failure.Failure(twisted.internet.error.ProcessExitedAlready("Other error"))
         with mock.patch.multiple(self.monitor,
                                  _resultUp=mock.DEFAULT,
-                                 _resultDown=mock.DEFAULT,
-                                 runCommand=mock.DEFAULT) as mocks:
+                                 _resultDown=mock.DEFAULT) as mocks:
             with self.assertRaises((failure.Failure, reason.type)):
                 self.monitor.processEnded(reason)
         mocks['_resultDown'].assert_not_called()
         mocks['_resultUp'].assert_not_called()
         self.assertIsNone(self.monitor.checkCall)
         self.reactor.advance(self.monitor.intvCheck)
-        mocks['runCommand'].assert_not_called()
 
     def testLeftoverProcesses(self):
         """Assert that leftoverProcesses has different output for the two cases"""

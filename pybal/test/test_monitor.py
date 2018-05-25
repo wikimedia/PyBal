@@ -6,13 +6,19 @@
   This module contains tests for `pybal.monitor`.
 
 """
+
+# Python imports
 import unittest, mock
 
+# Twisted imports
+import twisted.test.proto_helpers
+from twisted.internet import task, defer
+
+# Pybal imports
 import pybal.monitor
 import pybal.util
 
-import twisted.test.proto_helpers
-
+# Testing imports
 from .fixtures import PyBalTestCase
 
 
@@ -65,6 +71,96 @@ class BaseMonitoringProtocolTestCase(PyBalTestCase):
         self.monitor.run()
         self.monitor.stop()
         self.assertFalse(self.monitor.active)
+
+class BaseLoopingCheckMonitoringProtocolTestCase(BaseMonitoringProtocolTestCase):
+
+    monitorClass = pybal.monitor.LoopingCheckMonitoringProtocol
+
+    def testLoopingCheck(self):
+        """
+        Tests whether the looping call 'check' is actually invoked
+        at the right interval.
+        """
+
+        with mock.patch.object(self.monitor, 'check') as mock_check:
+            self.monitor.run()
+            self.assertIsInstance(self.monitor.checkCall, task.LoopingCall)
+            self.assertTrue(callable(self.monitor.checkCall))
+            self.assertTrue(self.monitor.checkCall.running)
+
+            interval = self.monitor.checkCall.interval
+
+            mock_check.assert_not_called()
+
+            self.reactor.advance(interval / 2)
+
+            mock_check.assert_not_called()
+
+            self.reactor.advance(interval / 2)
+
+            mock_check.assert_called_once()
+
+            self.reactor.advance(interval)
+
+            self.assertEqual(mock_check.call_count, 2)
+
+    def testLoopingCheckLongDeferring(self):
+        """
+        Tests whether a long-deferring check (i.e. longer than interval)
+        does not result in a newly scheduled/invoked check before the previous
+        one completes.
+        """
+
+        with mock.patch.object(self.monitor, 'check') as mock_check:
+            self.monitor.run()
+            self.assertIsInstance(self.monitor.checkCall, task.LoopingCall)
+            self.assertTrue(callable(self.monitor.checkCall))
+            self.assertTrue(self.monitor.checkCall.running)
+
+            interval = self.monitor.checkCall.interval
+
+            # Make mocked f return a Deferred and wait longer than interval
+            longDeferrer = defer.Deferred()
+            mock_check.return_value = longDeferrer
+
+            self.reactor.advance(interval)
+
+            mock_check.assert_called_once()
+
+            # At this point the Deferred returned by f hasn't fired yet,
+            # so LoopingCall should wait
+
+            self.reactor.advance(interval)
+
+            mock_check.assert_called_once()     # not twice
+
+            # Fire the Deferred
+            longDeferrer.callback(True)
+
+            mock_check.assert_called_once()     # not twice
+
+            self.reactor.advance(interval)
+
+            self.assertEqual(mock_check.call_count, 2)
+
+    def testLoopingCheckFailure(self):
+
+        with mock.patch.multiple(self.monitor,
+                                 check=mock.DEFAULT,
+                                 report=mock.DEFAULT) as mocks:
+            mocks['check'].side_effect = Exception("Testing loop failure")
+
+            self.monitor.run()
+
+        self.assertIsInstance(self.monitor.checkCall, task.LoopingCall)
+        self.assertTrue(callable(self.monitor.checkCall))
+        self.assertTrue(self.monitor.checkCall.running)
+
+        interval = self.monitor.checkCall.interval
+        self.reactor.advance(interval)
+
+        mocks['check'].assert_called_once()
+        self.assertTrue(self.monitor.checkCall.running)
 
 
 class MonitoringProtocolTestCase(PyBalTestCase):

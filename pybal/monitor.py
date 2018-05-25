@@ -5,11 +5,17 @@ Copyright (C) 2006-2014 by Mark Bergsma <mark@nedworks.org>
 Monitor class implementations for PyBal
 """
 
-import twisted.internet.reactor
-
-from . import util
+# Python imports
 import logging
+
+# Twisted imports
+import twisted.internet.reactor
+from twisted.internet import task
+
+# Pybal imports
+from . import util
 from pybal.metrics import Counter, Gauge
+
 
 _log = util._log
 
@@ -145,3 +151,64 @@ class MonitoringProtocol(object):
         else:
             raise ValueError("Value of %s is not a string or stringlist" %
                              optionname)
+
+
+class LoopingCheckMonitoringProtocol(MonitoringProtocol):
+    """
+    Class that sets up a looping call (self.check) to do a monitoring check with
+    a semi-fixed interval.
+    """
+
+    INTV_CHECK = 10
+
+    def __init__(self, coordinator, server, configuration={}, reactor=None):
+
+        assert hasattr(self, 'check'), "Method 'check' is not implemented."
+
+        super(LoopingCheckMonitoringProtocol, self).__init__(
+            coordinator,
+            server,
+            configuration,
+            reactor)
+
+        self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
+
+        self.checkCall = None
+
+    def run(self):
+        """
+        Start the monitoring. Sets up the looping call.
+        """
+
+        super(LoopingCheckMonitoringProtocol, self).run()
+
+        self.checkCall = task.LoopingCall(self.check)
+        self.checkCall.clock = self.reactor
+        self.checkCall.start(self.intvCheck, now=False).addErrback(self.onCheckFailure)
+
+    def stop(self):
+        """
+        Stop the monitoring. Stops the looping call.
+        """
+
+        if self.checkCall is not None and self.checkCall.running:
+            self.checkCall.stop()
+
+        super(LoopingCheckMonitoringProtocol, self).stop()
+
+    def check(self):
+        raise NotImplementedError()
+
+    def onCheckFailure(self, failure):
+        """
+        Called when the looping call (check) throws an error/Failure
+        As we generally want the monitor to keep running no matter what,
+        restart the loop.
+        """
+
+        self.report("Check loop aborted due to failure: {}. "
+            "Restarting.".format(failure.getErrorMessage()),
+            level=logging.WARN)
+
+        if not self.checkCall.running:
+            self.checkCall.start(self.intvCheck, now=False)

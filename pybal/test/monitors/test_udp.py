@@ -21,7 +21,7 @@ import pybal.util
 from pybal.monitors.udp import UDPMonitoringProtocol
 
 
-class UDPMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTestCase):
+class UDPMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitoringProtocolTestCase):
     monitorClass = UDPMonitoringProtocol
 
     def setUp(self):
@@ -34,7 +34,7 @@ class UDPMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTestCase)
         self.reactor.listenUDP = mock.Mock(side_effect=startProtocol)
 
     def testInit(self):
-        self.assertEquals(self.monitor.interval,
+        self.assertEquals(self.monitor.intvCheck,
                           UDPMonitoringProtocol.INTV_CHECK)
         self.assertEquals(self.monitor.icmp_timeout,
                           UDPMonitoringProtocol.ICMP_TIMEOUT)
@@ -44,14 +44,12 @@ class UDPMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTestCase)
         config['udp.icmp-timeout'] = 2
         monitor = UDPMonitoringProtocol(
             self.coordinator, self.server, config)
-        self.assertEquals(monitor.interval, 5)
+        self.assertEquals(monitor.intvCheck, 5)
         self.assertEquals(monitor.icmp_timeout, 2)
 
     def testRun(self):
         self.assertEquals(self.monitor.last_down_timestamp, 0)
-        self.monitor.run()
-        self.assertEquals(self.monitor.loop.running, True)
-        self.assertTrue(self.monitor.up)
+        super(UDPMonitoringProtocolTestCase, self).testRun()
         self.reactor.listenUDP.assert_called_with(0, self.monitor)
 
     def testConnectionRefused(self):

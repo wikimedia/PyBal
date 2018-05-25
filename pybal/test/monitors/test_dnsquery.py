@@ -6,17 +6,17 @@
   This module contains tests for `pybal.monitors.dnsquery`.
 """
 
-# Testing imports
-from .. import test_monitor
+# Twisted imports
+from twisted.internet import defer, reactor
+from twisted.names.common import ResolverBase
+from twisted.names import dns, error
 
 # Pybal imports
 import pybal.monitor
 from pybal.monitors.dnsquery import DNSQueryMonitoringProtocol
 
-# Twisted imports
-from twisted.internet import defer, reactor
-from twisted.names.common import ResolverBase
-from twisted.names import dns, error
+# Testing imports
+from .. import test_monitor
 
 
 class FakeResolverOK(ResolverBase):
@@ -60,7 +60,7 @@ class FakeResolverUnknownError(ResolverBase):
         return defer.fail(error.DNSUnknownError([]))
 
 
-class DNSQueryMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTestCase):
+class DNSQueryMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.DNSQueryMonitoringProtocol`."""
 
     monitorClass = DNSQueryMonitoringProtocol
@@ -96,6 +96,7 @@ class DNSQueryMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTest
         """Install a mocked resolver to test different lookup results"""
         self.monitor.resolver = fakeResolver()
         query = self.monitor.check()
+        self.assertIsInstance(query, defer.Deferred)
 
         def test_dnsquery(results):
             if expectSuccess:

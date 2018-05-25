@@ -5,24 +5,27 @@ Copyright (C) 2012-2014 by Mark Bergsma <mark@nedworks.org>
 DNS Monitor class implementation for PyBal
 """
 
-from pybal import monitor
-from pybal.metrics import Gauge
+# Python imports
+import random, socket
+import logging
 
+# Twisted imports
 from twisted.internet import defer
 from twisted.names import client, dns, error
 from twisted.python import runtime
-import logging
 
-import random, socket
+# Pybal imports
+from pybal import monitor
+from pybal.metrics import Gauge
 
-class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
+
+class DNSQueryMonitoringProtocol(monitor.LoopingCheckMonitoringProtocol):
     """
     Monitor that checks a DNS server by doing repeated DNS queries
     """
 
     __name__ = 'DNSQuery'
 
-    INTV_CHECK = 10
     TIMEOUT_QUERY = 5
 
     catchList = (defer.TimeoutError, error.DomainError,
@@ -54,13 +57,11 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
             configuration,
             reactor=reactor)
 
-        self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toQuery = self._getConfigInt('timeout', self.TIMEOUT_QUERY)
         self.hostnames = self._getConfigStringList('hostnames')
         self.failOnNXDOMAIN = self._getConfigBool('fail-on-nxdomain', False)
 
         self.resolver = None
-        self.checkCall = None
         self.DNSQueryDeferred = None
         self.checkStartTime = None
 
@@ -74,15 +75,9 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         # support querying a nameserver over IPv6.
         self.resolver = client.createResolver([(ip, 53) for ip in self.server.ip4_addresses])
 
-        if not self.checkCall or not self.checkCall.active():
-            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
-
     def stop(self):
         """Stop the monitoring"""
         super(DNSQueryMonitoringProtocol, self).stop()
-
-        if self.checkCall and self.checkCall.active():
-            self.checkCall.cancel()
 
         if self.DNSQueryDeferred is not None:
             self.DNSQueryDeferred.cancel()
@@ -174,9 +169,5 @@ class DNSQueryMonitoringProtocol(monitor.MonitoringProtocol):
         """
 
         self.checkStartTime = None
-
-        # Schedule the next check
-        if self.active:
-            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
 
         return result

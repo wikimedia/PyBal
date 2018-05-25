@@ -5,16 +5,20 @@ Copyright (C) 2008 by Mark Bergsma <mark@nedworks.org>
 Monitor class implementations for PyBal
 """
 
+# Python imports
+import os, sys, signal, errno
+import logging
+
+# Twisted imports
+from twisted.internet import process, error, defer
+from twisted.python.runtime import seconds
+import twisted.internet.reactor
+
+# Pybal imports
 from pybal import monitor
 from pybal.util import log
 from pybal.metrics import Gauge
 
-import os, sys, signal, errno
-import logging
-
-from twisted.internet import process, error
-from twisted.python.runtime import seconds
-import twisted.internet.reactor
 
 class ProcessGroupProcess(process.Process, object):
     """
@@ -82,7 +86,7 @@ class ProcessGroupProcess(process.Process, object):
     def signalProcessGroup(self, signal, pgid=None):
         os.kill(pgid or -self.pid, signal)
 
-class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
+class RunCommandMonitoringProtocol(monitor.LoopingCheckMonitoringProtocol):
     """
     Monitor that checks server uptime by repeatedly fetching a certain URL
     """
@@ -120,7 +124,6 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         locals = {  'server':   server
         }
 
-        self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.timeout = self._getConfigInt('timeout', self.TIMEOUT_RUN)
         self.command = self._getConfigString('command')
         try:
@@ -132,24 +135,13 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
 
         self.logOutput = self._getConfigBool('log-output', True)
 
-        self.checkCall = None
         self.runningProcess = None
-
-    def run(self):
-        """Start the monitoring"""
-
-        super(RunCommandMonitoringProtocol, self).run()
-
-        if not self.checkCall or not self.checkCall.active():
-            self.checkCall = self.reactor.callLater(self.intvCheck, self.runCommand)
+        self.runningProcessDeferred = None
 
     def stop(self):
         """Stop all running and/or upcoming checks"""
 
         super(RunCommandMonitoringProtocol, self).stop()
-
-        if self.checkCall and self.checkCall.active():
-            self.checkCall.cancel()
 
         # Try to kill any running check
         if self.runningProcess is not None:
@@ -162,6 +154,9 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
         self.checkStartTime = seconds()
         self.runningProcess = self._spawnProcess(self, self.command, [self.command] + self.arguments,
                                                  sessionLeader=True, timeout=(self.timeout or None))
+        self.runningProcessDeferred = defer.Deferred()
+        return self.runningProcessDeferred
+    check = runCommand
 
     def makeConnection(self, process):
         pass
@@ -204,10 +199,7 @@ class RunCommandMonitoringProtocol(monitor.MonitoringProtocol):
             **self.metric_labels
             ).set(duration)
 
-        # Schedule the next check
-        if self.active:
-            self.checkCall = self.reactor.callLater(self.intvCheck, self.runCommand)
-
+        self.runningProcessDeferred.callback(reason.type)
         reason.trap(error.ProcessDone, error.ProcessTerminated)
 
     def leftoverProcesses(self, allKilled):

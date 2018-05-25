@@ -5,15 +5,19 @@ Copyright (C) 2006 by Mark Bergsma <mark@nedworks.org>
 Monitor class implementations for PyBal
 """
 
-from pybal import monitor, util
-from pybal.metrics import Gauge
+# Python imports
+import logging, random
 
+# Twisted imports
 from twisted.internet import defer
 from twisted.web import client
 from twisted.python.runtime import seconds
 import twisted.internet.reactor
 
-import logging, random
+# Pybal imports
+from pybal import monitor, util
+from pybal.metrics import Gauge
+
 
 log = util.log
 
@@ -35,12 +39,10 @@ class RedirHTTPClientFactory(client.HTTPClientFactory):
     protocol = RedirHTTPPageGetter
 
 
-class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
+class ProxyFetchMonitoringProtocol(monitor.LoopingCheckMonitoringProtocol):
     """
     Monitor that checks server uptime by repeatedly fetching a certain URL
     """
-
-    INTV_CHECK = 10
 
     TIMEOUT_GET = 5
 
@@ -76,33 +78,20 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
             configuration,
             reactor=reactor)
 
-        self.intvCheck = self._getConfigInt('interval', self.INTV_CHECK)
         self.toGET = self._getConfigInt('timeout', self.TIMEOUT_GET)
         self.expectedStatus = self._getConfigInt('http_status',
                                                  self.HTTP_STATUS)
 
-        self.checkCall = None
         self.getPageDeferred = None
 
         self.checkStartTime = None
 
         self.URL = self._getConfigStringList('url')
 
-    def run(self):
-        """Start the monitoring"""
-
-        super(ProxyFetchMonitoringProtocol, self).run()
-
-        if not self.checkCall or not self.checkCall.active():
-            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
-
     def stop(self):
         """Stop all running and/or upcoming checks"""
 
         super(ProxyFetchMonitoringProtocol, self).stop()
-
-        if self.checkCall and self.checkCall.active():
-            self.checkCall.cancel()
 
         if self.getPageDeferred is not None:
             self.getPageDeferred.cancel()
@@ -133,6 +122,7 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
             self._fetchSuccessful,
             self._fetchFailed
         ).addBoth(self._checkFinished)
+        return self.getPageDeferred
 
     def _fetchSuccessful(self, result):
         """Called when getProxyPage is finished successfully."""
@@ -175,10 +165,6 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         """
 
         self.checkStartTime = None
-
-        # Schedule the next check
-        if self.active:
-            self.checkCall = self.reactor.callLater(self.intvCheck, self.check)
 
         return result
 

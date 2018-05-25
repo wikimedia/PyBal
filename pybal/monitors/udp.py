@@ -5,14 +5,18 @@ Copyright (C) 2018 by Valentin Gutierrez <vgutierrez@wikimedia.org>
 UDP Monitor class implementation for PyBal
 """
 
+# Python imports
 import logging
 
+# Twisted imports
 from twisted.internet import protocol
-from twisted.internet.task import LoopingCall
 from twisted.python import runtime
+
+# Pybal imports
 from pybal import monitor
 
-class UDPMonitoringProtocol(monitor.MonitoringProtocol, protocol.DatagramProtocol):
+
+class UDPMonitoringProtocol(monitor.LoopingCheckMonitoringProtocol, protocol.DatagramProtocol):
     """
     Monitor that sends a Len=0 UDP packet to the server.
     As long as it doesn't get an ICMP destination unreachable it will
@@ -21,7 +25,6 @@ class UDPMonitoringProtocol(monitor.MonitoringProtocol, protocol.DatagramProtoco
 
     __name__ = 'UDP'
 
-    INTV_CHECK = 10
     # After ICMP_TIMEOUT seconds it will consider the monitor up again
     ICMP_TIMEOUT = 20
 
@@ -30,10 +33,8 @@ class UDPMonitoringProtocol(monitor.MonitoringProtocol, protocol.DatagramProtoco
 
         super(UDPMonitoringProtocol, self).__init__(coordinator, server, configuration)
 
-        self.loop = None
         self.port = None
         self.last_down_timestamp = 0
-        self.interval = self._getConfigInt('interval', self.INTV_CHECK)
         self.icmp_timeout = self._getConfigInt('icmp-timeout', self.ICMP_TIMEOUT)
 
     def __report_prefix(self):
@@ -41,8 +42,6 @@ class UDPMonitoringProtocol(monitor.MonitoringProtocol, protocol.DatagramProtoco
 
     def startProtocol(self):
         self.transport.connect(self.server.ip, self.server.port)
-        self.loop = LoopingCall(self.check)
-        self.loop.start(self.interval)
 
     def run(self):
         """Start the monitoring"""
@@ -55,9 +54,6 @@ class UDPMonitoringProtocol(monitor.MonitoringProtocol, protocol.DatagramProtoco
         """Stop the monitoring"""
 
         super(UDPMonitoringProtocol, self).stop()
-
-        if self.loop and self.loop.running:
-            self.loop.stop()
 
         if self.port:
             self.port.loseConnection()

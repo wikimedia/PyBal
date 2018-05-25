@@ -6,14 +6,8 @@
   This module contains tests for `pybal.monitors.proxyfetch`.
 """
 
-# Testing imports
-from .. import test_monitor
-
+# Python imports
 import unittest, mock
-
-# Pybal imports
-import pybal.monitor
-from pybal.monitors.proxyfetch import ProxyFetchMonitoringProtocol
 
 # Twisted imports
 import twisted.internet.base
@@ -21,8 +15,15 @@ from twisted.internet import defer, reactor, task
 from twisted.python import failure
 from twisted.python.runtime import seconds
 
+# Pybal imports
+import pybal.monitor
+from pybal.monitors.proxyfetch import ProxyFetchMonitoringProtocol
 
-class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTestCase):
+# Testing imports
+from .. import test_monitor
+
+
+class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitoringProtocolTestCase):
     """Test case for `pybal.monitors.ProxyFetchMonitoringProtocol`."""
 
     monitorClass = ProxyFetchMonitoringProtocol
@@ -49,29 +50,11 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         with self.assertRaises(Exception):
             monitor = ProxyFetchMonitoringProtocol(None, self.server, self.config)
 
-    def testRun(self):
-        with mock.patch.object(self.monitor, 'check') as mock_check:
-            super(ProxyFetchMonitoringProtocolTestCase, self).testRun()
-        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
-
-    def testRunAlreadyActive(self):
-        self.monitor.checkCall = self.monitor.reactor.callLater(1, lambda: None)
-        callTime = self.monitor.checkCall.getTime()
-        self.assertTrue(self.monitor.checkCall.active())
-        with mock.patch.object(self.monitor, 'check') as mock_check:
-            super(ProxyFetchMonitoringProtocolTestCase, self).testRun()
-        self.assertEqual(self.monitor.checkCall.getTime(), callTime)
-
-    @mock.patch.object(reactor, 'callLater')
-    def testStopCallsCancelled(self, mock_callLater):
+    def testStopCallsCancelled(self):
         self.monitor.run()
-        cmCheckCall = mock.patch.object(self.monitor, 'checkCall',
-            spec=twisted.internet.base.DelayedCall)
-        cmGetPageDeferred = mock.patch.object(self.monitor, 'getPageDeferred',
-            spec=defer.Deferred)
-        with cmCheckCall as m_checkCall, cmGetPageDeferred as m_getPageDeferred:
+        with mock.patch.object(self.monitor, 'getPageDeferred',
+            spec=defer.Deferred) as m_getPageDeferred:
             self.monitor.stop()
-        m_checkCall.cancel.assert_called()
         m_getPageDeferred.cancel.assert_called()
 
     def testCheck(self):
@@ -83,8 +66,9 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
                                  _fetchFailed=mock.DEFAULT,
                                  _checkFinished=mock.DEFAULT) as mocks:
             mocks['getProxyPage'].return_value = defer.Deferred()
-            self.monitor.check()
+            d = self.monitor.check()
 
+        self.assertIsInstance(d, defer.Deferred)
         self.assertGreaterEqual(self.monitor.checkStartTime, startSeconds)
 
         # Check getProxyPage keyword arguments
@@ -168,33 +152,20 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseMonitoringProtocolTe
         testFailure.trap(testFailure.type)
 
     def testCheckFinished(self):
-        self.monitor.active = True
         testResult = "Test page result"
 
-        with mock.patch.object(self.monitor, 'check') as mock_check:
-            r = self.monitor._checkFinished(testResult)
+        r = self.monitor._checkFinished(testResult)
 
         self.assertIs(r, testResult)
         self.assertIsNone(self.monitor.checkStartTime)
-        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
-
-    def testCheckFinishedNotActive(self):
-        self.monitor.active = False
-        self.assertIsNone(self.monitor.checkCall)
-        testResult = "Test page result"
-        self.monitor._checkFinished(testResult)
-        self.assertIsNone(self.monitor.checkCall)
 
     def testCheckFinishedFailure(self):
-        self.monitor.active = True
         testFailure = twisted.internet.error.ConnectError("Testing a connect error")
 
-        with mock.patch.object(self.monitor, 'check') as mock_check:
-            r = self.monitor._checkFinished(testFailure)
+        r = self.monitor._checkFinished(testFailure)
 
         self.assertIs(r, testFailure)
         self.assertIsNone(self.monitor.checkStartTime)
-        self.assertDelayedCallInvoked(self.monitor.checkCall, mock_check)
 
     def testGetProxyPageHTTP(self):
         testURL = "http://en.wikipedia.org/"
