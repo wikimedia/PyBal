@@ -79,6 +79,8 @@ class FSM(object):
         1:  'manualStart',
         2:  'manualStop',
         3:  'automaticStart',
+        4:  'manualStartPassive',
+        5:  'automaticStartPassive',
 
         9:  'connectRetryTimeEvent',
         10: 'holdTimeEvent',
@@ -222,6 +224,30 @@ class FSM(object):
                     return True
                 else:
                     return False
+
+    def _startPassive(self):
+        if self.state == ST_IDLE:
+            if self.bgpPeering is not None:
+                self.bgpPeering.completeInit(self.protocol)
+            self.connectRetryCounter = 0
+            self.connectRetryTimer.reset(self.connectRetryTime)
+            self.state = ST_ACTIVE
+
+    def manualStartPassive(self):
+        """
+        Should be called when a BGP Manual Start with Passive TCP Establishment
+        (event 4) is requested.
+        """
+
+        self._startPassive()
+
+    def automaticStartPassive(self):
+        """
+        Should be called when a BGP Automatic Start with Passive TCP Establishment
+        (event 5) is requested.
+        """
+
+        self._startPassive()
 
     def connectionMade(self):
         """Should be called when a TCP connection has successfully been

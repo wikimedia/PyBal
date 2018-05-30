@@ -87,12 +87,17 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         self.assertEqual(self.factory.myASN, self.testASN)
         self.assertEqual(self.factory.peerAddr, '127.0.0.2')
         self.assertIsNone(self.factory.peerId)
+        self.assertFalse(self.factory.passiveStart)
         self.assertIsInstance(self.factory.fsm, BGPFactory.FSM)
         self.assertTrue(self.factory.addressFamilies)   # Not empty
         self.assertEqual(self.factory.inConnections, [])
         self.assertEqual(self.factory.outConnections, [])
         self.assertIsNone(self.factory.estabProtocol)
         self.assertIsInstance(self.factory.consumers, set)
+
+    def testInitPassiveStart(self):
+        factory = BGPPeering(self.testASN, peerAddr='127.0.0.2', passiveStart=True)
+        self.assertTrue(factory.passiveStart)
 
     def testBuildProtocol(self):
         with mock.patch.object(self.factory, '_initProtocol') as mock_initProtocol:
@@ -146,9 +151,18 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         mock_fsm.connectionFailed.assert_called_once()
 
     def testManualStart(self):
+        self.assertFalse(self.factory.passiveStart)
         with mock.patch.object(self.factory, 'fsm') as mock_fsm:
             self.factory.manualStart()
         mock_fsm.manualStart.assert_called_once()
+        mock_fsm.manualStartPassive.assert_not_called()
+
+    def testManualStartPassive(self):
+        self.factory.passiveStart = True
+        with mock.patch.object(self.factory, 'fsm') as mock_fsm:
+            self.factory.manualStart()
+        mock_fsm.manualStartPassive.assert_called_once()
+        mock_fsm.manualStart.assert_not_called()
 
     def testManualStop(self):
         testProtocol = self.factory.buildProtocol(self.testAddr)
@@ -167,9 +181,18 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         return deferred.addCallback(testAllStopped, self, allConnections)
 
     def testAutomaticStart(self):
+        self.assertFalse(self.factory.passiveStart)
         with mock.patch.object(self.factory, 'fsm') as mock_fsm:
             self.factory.automaticStart()
         mock_fsm.automaticStart.assert_called_once()
+        mock_fsm.automaticStartPassive.assert_not_called()
+
+    def testAutomaticStartPassive(self):
+        self.factory.passiveStart = True
+        with mock.patch.object(self.factory, 'fsm') as mock_fsm:
+            self.factory.automaticStart()
+        mock_fsm.automaticStartPassive.assert_called_once()
+        mock_fsm.automaticStart.assert_not_called()
 
     def testConnectionClosed(self):
         self.factory.fsm.allowAutomaticStart = True
@@ -231,7 +254,7 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
             self.factory.protocolError(testFailure)
         except exceptions.NotificationSent as e:
             # Should have been trapped...
-            self.fail("Exception {} should have been trapped".format(e))    
+            self.fail("Exception {} should have been trapped".format(e))
 
     def testProtocolErrorOtherException(self):
         testFailure = failure.Failure(Exception("Any other exception"))

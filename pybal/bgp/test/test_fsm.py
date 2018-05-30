@@ -242,6 +242,14 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
     def test_Idle_Noops_event_2_9_10_11_17_18_19_20_23_24_26(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
+    @edge(ST_IDLE, 4, 5)
+    def test_Idle_event_4_5(self, event):
+        getattr(self.fsm, eventMethods[event])()
+        self.fsm.bgpPeering.completeInit.assert_called()
+        self.assertEqual(self.fsm.connectRetryCounter, 0)
+        self.assertTimerReset(self.fsm.connectRetryTimer, self.fsm.connectRetryTime)
+        self.assertState(ST_ACTIVE)
+
     @edge(ST_IDLE, 12)
     def test_Idle_event_12(self, event=12):
         self.fsm.delayOpen = True
@@ -280,8 +288,8 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @edge(ST_CONNECT, 1, 3)
-    def test_Connect_Noops_event_1_3(self, event):
+    @edge(ST_CONNECT, 1, 3, 4, 5)
+    def test_Connect_Noops_event_1_3_4_5(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_CONNECT, 2)
@@ -477,8 +485,8 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @edge(ST_ACTIVE, 1, 3)
-    def test_Active_Noops_event_1_3(self, event):
+    @edge(ST_ACTIVE, 1, 3, 4, 5)
+    def test_Active_Noops_event_1_3_4_5(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_ACTIVE, 2)
@@ -657,8 +665,8 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         super(FSMDefinitionStateOpenSentTestCase, self).setUp()
         self._setState(ST_OPENSENT)
 
-    @edge(ST_OPENSENT, 1, 3)
-    def test_OpenSent_Noops_event_1_3(self, event):
+    @edge(ST_OPENSENT, 1, 3, 4, 5)
+    def test_OpenSent_Noops_event_1_3_4_5(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_OPENSENT, 2)
@@ -809,8 +817,8 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
         super(FSMDefinitionStateOpenConfirmTestCase, self).setUp()
         self._setState(ST_OPENCONFIRM)
 
-    @edge(ST_OPENCONFIRM, 1, 3)
-    def test_OpenConfirm_Noops_event_1_3(self, event):
+    @edge(ST_OPENCONFIRM, 1, 3, 4, 5)
+    def test_OpenConfirm_Noops_event_1_3_4_5(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_OPENCONFIRM, 2)
@@ -967,8 +975,8 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
         self.assertCRCIncremented()
         self.assertState(ST_IDLE)
 
-    @edge(ST_ESTABLISHED, 1, 3)
-    def test_Established_Noops_event_1_3(self, event):
+    @edge(ST_ESTABLISHED, 1, 3, 4, 5)
+    def test_Established_Noops_event_1_3_4_5(self, event):
         self._testIgnoreEvent(eventMethods[event])
 
     @edge(ST_ESTABLISHED, 2)

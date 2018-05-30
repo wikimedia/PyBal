@@ -835,10 +835,11 @@ class BGPPeering(BGPFactory):
                                          **metric_keywords)
     }
 
-    def __init__(self, myASN=None, peerAddr=None):
+    def __init__(self, myASN=None, peerAddr=None, **kwargs):
         self.myASN = myASN
         self.peerAddr = peerAddr
         self.peerId = None
+        self.passiveStart = kwargs.get('passiveStart', False)
         self.fsm = BGPFactory.FSM(self)
         self.addressFamilies = set(( AFI_INET, SAFI_UNICAST ))
         self.inConnections = []
@@ -926,9 +927,12 @@ class BGPPeering(BGPFactory):
             pass
 
     def manualStart(self):
-        """BGP ManualStart event (event 1)"""
+        """BGP ManualStart event (event 1 or 4)"""
 
-        self.fsm.manualStart()
+        if self.passiveStart:
+            self.fsm.manualStartPassive()
+        else:
+            self.fsm.manualStart()
 
     def manualStop(self):
         """BGP ManualStop event (event 2) Returns a Deferred that will fire once the connection(s) have closed"""
@@ -945,9 +949,12 @@ class BGPPeering(BGPFactory):
         return defer.succeed(True)
 
     def automaticStart(self, idleHold=False):
-        """BGP AutomaticStart event (event 3)"""
+        """BGP AutomaticStart event (event 3 or 5)"""
 
-        self.fsm.automaticStart(idleHold)
+        if self.passiveStart:
+            self.fsm.automaticStartPassive()
+        else:
+            self.fsm.automaticStart(idleHold)
 
     def releaseResources(self, protocol):
         """
