@@ -78,10 +78,14 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
     def setUp(self):
         self.factory = BGPPeering(self.testASN, peerAddr='127.0.0.2')
         self.factory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
+
         # Mock factory.log and fsm.FSM.log for less noisy output
         self.factory.log = mock.Mock()
         self._log_patcher = mock.patch.object(fsm.FSM, 'log')
         self._log_patcher.start()
+
+        # Assume ACTIVE state for most tests as IDLE does very little
+        self.factory.fsm.state = fsm.ST_ACTIVE
 
     def testInit(self):
         self.assertEqual(self.factory.myASN, self.testASN)
@@ -112,7 +116,6 @@ class BGPPeeringTestCase(BGPFactoryTestCase):
         self.assertIsInstance(p, self.factory.protocol)
         self.assertIn(p, self.factory.inConnections)
         self.assertIs(p.bgpPeering, self.factory)
-        self.assertEqual(p.fsm.state, fsm.ST_ACTIVE)
 
     def testInitProtocol(self):
         testProtocol = BGPFactory.buildProtocol(self.factory, self.testAddr)
@@ -403,10 +406,11 @@ class PeeringSessionToOpenSentTestCase(unittest.TestCase):
     and PeeringServerSessionToOpenSentTestCase
     """
 
-    def assertState(self, state):
-        self.assertEqual(self.fsm.state, state,
+    def assertState(self, *states):
+        self.assertIn(self.fsm.state, states,
             "State is {} instead of expected {}".format(
-                bgp.stateDescr[self.fsm.state], bgp.stateDescr[state]))
+                bgp.stateDescr[self.fsm.state],
+                "|".join([bgp.stateDescr[state] for state in states])))
 
     def setUp(self):
         self.myASN = 64601
@@ -428,16 +432,6 @@ class PeeringSessionToOpenSentTestCase(unittest.TestCase):
         # Mock logging for less noisy output
         self.peering.log = mock.Mock()
         self.peering.fsm.log = mock.Mock()
-
-    def _startSession(self):
-        self.peering.automaticStart()
-
-        self.assertState(fsm.ST_CONNECT)
-        self.assertTrue(self.peering.reactor.tcpClients)
-
-        # Pretend we're starting a connection
-
-        self.peering.startedConnecting(mock.Mock())
 
     def _setupTransport(self):
         self.transport = twisted.test.proto_helpers.StringTransport(peerAddress=self.peerAddr)
@@ -492,6 +486,16 @@ class PeeringClientSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
 
         self.protocol = self.peering.buildProtocol(self.peerAddr)
 
+    def _startSession(self):
+        self.peering.automaticStart()
+
+        self.assertState(fsm.ST_CONNECT)
+        self.assertTrue(self.peering.reactor.tcpClients)
+
+        # Pretend we're starting a connection
+
+        self.peering.startedConnecting(mock.Mock())
+
     def assertProtocolInitialized(self):
         self.assertIn(self.protocol, self.peering.outConnections)
         self.assertState(fsm.ST_CONNECT)
@@ -513,6 +517,8 @@ class PeeringServerSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
 
     def _setupPeering(self):
         super(PeeringServerSessionToOpenSentTestCase, self)._setupPeering()
+        # Start passively
+        self.peering.passiveStart = True
         self._setupServerFactory()
 
     def _setupServerFactory(self):
@@ -526,6 +532,17 @@ class PeeringServerSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
         self.serverFactory = BGPServerFactory(peers, myASN=self.myASN)
         self.serverFactory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
 
+    def _startSession(self):
+        """
+        For a server session test case, starting the session consists of
+        listening passively in ACTIVE state.
+        """
+
+        self.peering.automaticStart()   # may be passive start
+
+        expectedState = fsm.ST_ACTIVE if self.peering.passiveStart else fsm.ST_CONNECT
+        self.assertState(expectedState)
+
     @mock.patch.object(fsm.FSM, 'log')
     def _setupProtocol(self, mock_log):
         # A client connection has been made.
@@ -535,7 +552,7 @@ class PeeringServerSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
 
     def assertProtocolInitialized(self):
         self.assertIn(self.protocol, self.peering.inConnections)
-        self.assertState(fsm.ST_ACTIVE)
+        self.assertState(fsm.ST_ACTIVE, fsm.ST_CONNECT)
 
     def testSession(self):
         self._testSession()

@@ -885,15 +885,15 @@ class BGPPeering(BGPFactory):
     def takeServerConnection(self, peerAddr):
         """Builds a BGP protocol instance for a server connection"""
 
+        # Ask the FSM if this connection should be accepted in this state
+        if not self.fsm.tcpConnectionValid():
+            # We're not taking connections in IDLE state
+            return None
+
         p = BGPFactory.buildProtocol(self, peerAddr)
         if p is not None:
             self._initProtocol(p, peerAddr)
             self.inConnections.append(p)
-
-            # FIXME: why is this needed and not handled by the FSM?
-            # This appears to be because FSM events 4 and 5 are not implemented?
-            if peerAddr.port != PORT:
-                p.fsm.state = ST_ACTIVE
 
         return p
 
