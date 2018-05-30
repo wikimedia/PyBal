@@ -52,6 +52,13 @@ class UDPMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitoringProto
         super(UDPMonitoringProtocolTestCase, self).testRun()
         self.reactor.listenUDP.assert_called_with(0, self.monitor)
 
+    def testCheck(self):
+        self.monitor.active = True
+        self.monitor.transport = mock.Mock()
+        self.monitor.check()
+        self.monitor.transport.write.assert_called_with("")
+        self.assertTrue(self.monitor.up)
+
     def testConnectionRefused(self):
         monitor = UDPMonitoringProtocol(
             self.coordinator, self.server, self.config)
