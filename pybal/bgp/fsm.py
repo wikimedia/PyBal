@@ -87,6 +87,7 @@ class FSM(object):
         11: 'keepAliveEvent',
         12: 'delayOpenEvent',
         13: 'idleHoldTimeEvent',
+        14: 'tcpConnectionValid',
 
         17: 'connectionMade',
         18: 'connectionFailed',
@@ -248,6 +249,15 @@ class FSM(object):
         """
 
         self._startPassive()
+
+    def tcpConnectionValid(self):
+        """
+        Should be called when a TCP connection request has been received.
+        (event 14)
+        Returns True if the connection should be accepted, False if not.
+        """
+
+        return (self.state != ST_IDLE)
 
     def connectionMade(self):
         """Should be called when a TCP connection has successfully been

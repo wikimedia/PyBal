@@ -262,6 +262,10 @@ class FSMDefinitionStateIdleTestCase(FSMDefinitionTestCase):
             self.fsm.idleHoldTimeEvent()
         self.fsm.bgpPeering.automaticStart.assert_called_with(idleHold=False)
 
+    @edge(ST_IDLE, 14)
+    def test_Idle_event_14(self, event=14):
+        self.assertFalse(self.fsm.tcpConnectionValid())
+
     @edge(ST_IDLE, 21, 22, 27, 28)
     def test_Idle_event_21_22_27_28(self, event):
         self._testIgnoreEvent(eventMethods[event], '')
@@ -324,6 +328,10 @@ class FSMDefinitionStateConnectTestCase(FSMDefinitionTestCase):
         self.fsm.protocol.sendOpen.assert_called()
         self.assertTimerReset(self.fsm.holdTimer, self.fsm.largeHoldTime)
         self.assertState(ST_OPENSENT)
+
+    @edge(ST_CONNECT, 14)
+    def test_Connect_event_14(self, event=14):
+        self.assertTrue(self.fsm.tcpConnectionValid())
 
     @edge(ST_CONNECT, 16, 17)
     def test_Connect_event_16_17_delayOpen_True(self, event):
@@ -524,6 +532,10 @@ class FSMDefinitionStateActiveTestCase(FSMDefinitionTestCase):
         self.assertTimerReset(self.fsm.holdTimer, self.fsm.largeHoldTime)
         self.assertState(ST_OPENSENT)
 
+    @edge(ST_ACTIVE, 14)
+    def test_ACTIVE_event_14(self, event=14):
+        self.assertTrue(self.fsm.tcpConnectionValid())
+
     @edge(ST_ACTIVE, 17)
     def test_Active_event_17_delayOpen_true(self, event=17):
         self.fsm.delayOpen = True
@@ -699,6 +711,10 @@ class FSMDefinitionStateOpenSentTestCase(FSMDefinitionTestCase):
         self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
 
+    @edge(ST_OPENSENT, 14)
+    def test_OpenSent_event_14(self, event=14):
+        self.assertTrue(self.fsm.tcpConnectionValid())
+
     @edge(ST_OPENSENT, 17)
     def test_OpenSent_event_17(self, event=17):
         self.fsm.connectionMade()
@@ -858,6 +874,10 @@ class FSMDefinitionStateOpenConfirmTestCase(FSMDefinitionTestCase):
     def test_OpenConfirm_event_12(self, event=12):
         self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
+
+    @edge(ST_OPENCONFIRM, 14)
+    def test_OpenConfirm_event_14(self, event=14):
+        self.assertTrue(self.fsm.tcpConnectionValid())
 
     @edge(ST_OPENCONFIRM, 17)
     def test_OpenConfirm_event_17(self, event=17):
@@ -1025,6 +1045,10 @@ class FSMDefinitionStateEstablishedTestCase(FSMDefinitionTestCase):
     def test_Established_event_12(self, event=12):
         self.fsm.delayOpen = True
         self._testFSM_error(eventMethods[event])
+
+    @edge(ST_ESTABLISHED, 14)
+    def test_Established_event_14(self, event=14):
+        self.assertTrue(self.fsm.tcpConnectionValid())
 
     @edge(ST_ESTABLISHED, 17)
     def test_Established_event_17(self, event=17):
