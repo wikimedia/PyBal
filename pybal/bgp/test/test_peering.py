@@ -17,7 +17,7 @@ import twisted.internet.error
 import twisted.test.proto_helpers
 
 # BGP imports
-from ..bgp import BGP
+from ..bgp import BGP, BGPUpdateMessage
 from ..bgp import BGPFactory, BGPServerFactory, BGPPeering
 from ..constants import *
 from .. import fsm, exceptions, bgp, attributes, ip
@@ -647,6 +647,273 @@ class NaiveBGPPeeringTestCase(unittest.TestCase):
 
         self.peering.setAdvertisements(set())
 
-        self.assertEqual(self.peering.advertised, self.emptyAFs)
         self.assertEqual(self.peering.toAdvertise, self.emptyAFs)
         self.assertEqual(self.peering.advertised, self.peering.toAdvertise)
+
+
+class NaiveConstructAndSendTestCase(unittest.TestCase):
+
+    def setUp(self):
+        # Mock factory.log for less noisy output
+        self._log_patcher = mock.patch.object(bgp.BGPFactory, 'log')
+        self._log_patcher.start()
+
+        self.peering = bgp.NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
+        self.peering.setEnabledAddressFamilies({
+            (AFI_INET, SAFI_UNICAST),
+            (AFI_INET6, SAFI_UNICAST)})
+
+        proto = bgp.BGP()
+        proto.transport = twisted.test.proto_helpers.StringTransportWithDisconnection()
+        self.peering.estabProtocol = proto
+
+        med = attributes.MEDAttribute(50)
+        aspath = attributes.ASPathAttribute([(2, [64496])])
+        origin = attributes.OriginAttribute((0))
+
+        self.attrs = attributes.AttributeDict({med, aspath, origin})
+
+    def tearDown(self):
+        self._log_patcher.stop()
+
+    def _createAdvertisements(self, count=1, attrs=None):
+        """
+        Returns a set with count IPv4 prefix advertisements, along with
+        mandatory attributes
+        """
+
+        frozenAttributes = attributes.FrozenAttributeDict(
+            attrs if attrs is not None else self.attrs)
+        return {
+            bgp.Advertisement(
+                prefix=prefix,
+                attributes=frozenAttributes,
+                addressfamily=self.addressFamily
+            )
+            for prefix in self._generatePrefixes(count) }
+
+    def _createAttributeMap(self, advertisements, attrs=None):
+        return {
+            attributes.FrozenAttributeDict(attrs or self.attrs): advertisements
+        }
+
+@mock.patch.object(BGP, 'sendMessage')
+class NaiveInetConstructAndSendTestCase(NaiveConstructAndSendTestCase):
+
+    addressFamily = (AFI_INET, SAFI_UNICAST)
+
+    @staticmethod
+    def _generatePrefixes(count=1):
+        for i in range(count):
+            yield ip.IPPrefix( (i, 32), addressfamily=ip.AFI_INET )
+
+    @unittest.skip("Bug: withdrawals handling is broken")
+    def test_FewWithdrawals_NoUpdates(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, 10 withdrawals and no updates.
+        This should fit in a single UPDATE message.
+        """
+
+        withdrawals = self._createAdvertisements(count=10)
+        attributeMap = {}
+        self.peering._sendInetUnicastUpdates(withdrawals, attributeMap)
+
+        mock_sendMessage.assert_called_once()   # A single message
+
+        # Test constructed BGP update field lengths
+        bgpupdate = mock_sendMessage.call_args[0][0]
+        self.assertEqual(len(bgpupdate[1]), 52)
+        self.assertEqual(len(bgpupdate[2]), 2)
+        self.assertEqual(len(bgpupdate[3]), 0)
+
+    @unittest.skip("Bug: withdrawals handling is broken")
+    def test_ManyWithdrawals_NoUpdates(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, 2000 withdrawals and no updates.
+        This should fit in 3 UPDATE messages.
+        """
+
+        withdrawals = self._createAdvertisements(count=2000)
+        attributeMap = {}
+        self.peering._sendInetUnicastUpdates(withdrawals, attributeMap)
+
+        # Should fit in 3 messages
+        self.assertEqual(mock_sendMessage.call_count, 3)
+
+        # Test constructed BGP updates field lengths
+        bgpupdates = [args[0] for args, kwargs in mock_sendMessage.call_args_list]
+        self.assertEqual(len(bgpupdates[0][1]), 4072)   # first packet full
+        self.assertEqual(len(bgpupdates[0][2]), 2)
+        self.assertEqual(len(bgpupdates[0][3]), 0)
+
+        self.assertEqual(len(bgpupdates[1][1]), 4072)   # second packet full
+        self.assertEqual(len(bgpupdates[1][2]), 2)
+        self.assertEqual(len(bgpupdates[1][3]), 0)
+
+        self.assertEqual(len(bgpupdates[2][1]), 1862)   # third packet half full
+        self.assertEqual(len(bgpupdates[2][2]), 2)
+        self.assertEqual(len(bgpupdates[2][3]), 0)
+
+    @unittest.skip("Bug: withdrawals handling is broken")
+    def test_FewWithdrawals_FewUpdates_SingleMessage(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, 10 withdrawals and 20 updates.
+        This should fit in a single update message.
+        """
+
+        withdrawals = self._createAdvertisements(count=10)
+        advertisements = self._createAdvertisements(count=20)
+        attributeMap = self._createAttributeMap(advertisements)
+        self.peering._sendInetUnicastUpdates(withdrawals, attributeMap)
+
+        mock_sendMessage.assert_called_once()   # A single message
+
+        # Test constructed BGP update field lengths
+        bgpupdate = mock_sendMessage.call_args[0][0]
+        self.assertEqual(len(bgpupdate[1]), 52)
+        self.assertEqual(len(bgpupdate[2]), 20)
+        self.assertEqual(len(bgpupdate[3]), 100)
+
+    @unittest.skip("Bug: withdrawals handling is broken")
+    def test_ManyWithdrawals_FewUpdates_TwoMessages(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, enough withdrawals to just fill a single
+        message. Subsequent updates (with their attributes) won't fit and
+        should be sent in a 2nd message.
+        """
+
+        withdrawals = self._createAdvertisements(count=814)
+        advertisements = self._createAdvertisements(count=10)
+        attributeMap = self._createAttributeMap(advertisements)
+        self.peering._sendInetUnicastUpdates(withdrawals, attributeMap)
+
+        self.assertEqual(mock_sendMessage.call_count, 2)
+
+        # Test constructed BGP updates field lengths
+        bgpupdates = [args[0] for args, kwargs in mock_sendMessage.call_args_list]
+        self.assertEqual(len(bgpupdates[0][1]), 4072)   # first packet withdrawals
+        self.assertEqual(len(bgpupdates[0][2]), 2)
+        self.assertEqual(len(bgpupdates[0][3]), 0)
+
+        self.assertEqual(len(bgpupdates[1][1]), 2)      # second packet, just updates
+        self.assertEqual(len(bgpupdates[1][2]), 20)
+        self.assertEqual(len(bgpupdates[1][3]), 50)
+
+    def test_NoWithdrawals_FewUpdates(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, with no withdrawals and a few updates
+        which fit in a single message.
+        """
+
+        advertisements = self._createAdvertisements(count=20)
+        attributeMap = self._createAttributeMap(advertisements)
+        self.peering._sendInetUnicastUpdates(set(), attributeMap)
+
+        mock_sendMessage.assert_called_once()
+
+        # Test constructed BGP update field lengths
+        bgpupdate = mock_sendMessage.call_args[0][0]
+        self.assertEqual(len(bgpupdate[1]), 2)
+        self.assertEqual(len(bgpupdate[2]), 20)
+        self.assertEqual(len(bgpupdate[3]), 100)
+
+    @unittest.skip("Bug: withdrawals handling is broken")
+    def test_ManyWithdrawals_ManyUpdates(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, enough withdrawals and updates to fill
+        multiple messages each.
+        """
+
+        withdrawals = self._createAdvertisements(count=1000)
+        advertisements = self._createAdvertisements(count=1200)
+        attributeMap = self._createAttributeMap(advertisements)
+        self.peering._sendInetUnicastUpdates(withdrawals, attributeMap)
+
+        self.assertEqual(mock_sendMessage.call_count, 3)
+
+        # Test constructed BGP updates field lengths
+        bgpupdates = [args[0] for args, kwargs in mock_sendMessage.call_args_list]
+        self.assertEqual(len(bgpupdates[0][1]), 4072)   # 1st packet withdrawals
+        self.assertEqual(len(bgpupdates[0][2]), 2)
+        self.assertEqual(len(bgpupdates[0][3]), 0)
+
+        self.assertEqual(len(bgpupdates[1][1]), 932)    # 2nd packet, some withdrawals
+        self.assertEqual(len(bgpupdates[1][2]), 20)
+        self.assertEqual(len(bgpupdates[1][3]), 3125)   # updates fill the rest
+
+        self.assertEqual(len(bgpupdates[2][1]), 2)      # 3rd packet, no withdrawals
+        self.assertEqual(len(bgpupdates[2][2]), 20)
+        self.assertEqual(len(bgpupdates[2][3]), 2875)   # some updates
+
+@mock.patch.object(BGP, 'sendMessage')
+class NaiveInet6ConstructAndSendTestCase(NaiveConstructAndSendTestCase):
+
+    addressFamily = (AFI_INET, SAFI_UNICAST)
+
+    def setUp(self):
+        super(NaiveInet6ConstructAndSendTestCase, self).setUp()
+
+        # Add a template MPReachNLRI with a sample nexthop and
+        self.attrs[attributes.MPReachNLRIAttribute] = attributes.MPReachNLRIAttribute(
+            (AFI_INET, AFI_INET6, ip.IPv6IP("::1"), [])
+        )
+
+    @staticmethod
+    def _generatePrefixes(count=1):
+        for i in range(count):
+            yield ip.IPPrefix(([i >> o for o in range(120, -8, -8)], 128),
+                              addressfamily=ip.AFI_INET6 )
+
+    def test_FewWithdrawals_NoUpdates(self, mock_sendMessage):
+        """
+        Tests Inet6 Unicast sending, 10 withdrawals and no updates.
+        This should fit in a single UPDATE message.
+        """
+
+        withdrawals = self._createAdvertisements(count=10, attrs={})
+        attributeMap = {}
+        self.peering._sendMPUpdates((AFI_INET6, SAFI_UNICAST), withdrawals, attributeMap)
+
+        mock_sendMessage.assert_called_once()   # A single message
+
+        # Test constructed BGP update field lengths
+        bgpupdate = mock_sendMessage.call_args[0][0]
+        self.assertEqual(len(bgpupdate[1]), 2)      # No IPv4 withdrawals
+        self.assertEqual(len(bgpupdate[2]), 179)    # MPUnreach attributes
+        self.assertEqual(len(bgpupdate[3]), 0)      # No IPv4 updates
+
+    def test_FewWithdrawals_FewUpdates(self, mock_sendMessage):
+        """
+        Tests Inet Unicast sending, 10 withdrawals and 20 updates.
+        This should fit in a single update message.
+        """
+
+        withdrawals = self._createAdvertisements(count=10, attrs={})
+        advertisements = self._createAdvertisements(count=20)
+        attributeMap = self._createAttributeMap(advertisements)
+        self.peering._sendMPUpdates((AFI_INET6, SAFI_UNICAST), withdrawals, attributeMap)
+
+        self.assertEqual(mock_sendMessage.call_count, 2)
+
+        # Test constructed BGP updates field lengths
+        bgpupdates = [args[0] for args, kwargs in mock_sendMessage.call_args_list]
+        self.assertEqual(len(bgpupdates[0][1]), 2)      # No IPv4 withdrawals
+        self.assertEqual(len(bgpupdates[0][2]), 179)    # MPUnreach attributes
+        self.assertEqual(len(bgpupdates[0][3]), 0)      # No IPv4 updates
+
+        self.assertEqual(len(bgpupdates[1][1]), 2)      # No IPv4 withdrawals
+        self.assertEqual(len(bgpupdates[1][2]), 385)    # MPReach attributes
+        self.assertEqual(len(bgpupdates[1][3]), 0)      # No IPv4 updates
+
+    def test_FewUpdates_MPReachNLRIAttributeMissing(self, mock_sendMessage):
+        """
+        sendMPUpdates needs a template MPReachNLRI attribute for nexthop info
+        Test whether it raises an exception if it's missing
+        """
+
+        del self.attrs[attributes.MPReachNLRIAttribute]
+
+        advertisements = self._createAdvertisements(count=20)
+        attributeMap = self._createAttributeMap(advertisements)
+        with self.assertRaises(ValueError):
+            self.peering._sendMPUpdates((AFI_INET6, SAFI_UNICAST), {}, attributeMap)
