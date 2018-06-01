@@ -18,7 +18,7 @@ import twisted.test.proto_helpers
 
 # BGP imports
 from ..bgp import BGP, BGPUpdateMessage
-from ..bgp import BGPFactory, BGPServerFactory, BGPPeering
+from ..peering import BGPFactory, BGPServerFactory, BGPPeering, NaiveBGPPeering
 from ..constants import *
 from .. import fsm, exceptions, bgp, attributes, ip
 
@@ -36,7 +36,7 @@ class BGPFactoryTestCase(unittest.TestCase):
         self.factory.myASN = 64600
 
         # Mock factory.log for less noisy output
-        self._log_patcher = mock.patch.object(bgp.BGPFactory, 'log')
+        self._log_patcher = mock.patch.object(BGPFactory, 'log')
         self._log_patcher.start()
 
     def tearDown(self):
@@ -55,7 +55,7 @@ class BGPServerFactoryTestCase(BGPFactoryTestCase):
         self.factory = BGPServerFactory(self.testPeers, self.testASN)
         self.factory.reactor = twisted.test.proto_helpers.MemoryReactorClock()
 
-        self._log_patcher = mock.patch.object(bgp.BGPFactory, 'log')
+        self._log_patcher = mock.patch.object(BGPFactory, 'log')
         self._log_patcher.start()
 
     def testBuildProtocol(self):
@@ -562,7 +562,7 @@ class PeeringServerSessionToOpenSentTestCase(PeeringSessionToOpenSentTestCase):
 class NaiveBGPPeeringTestCase(unittest.TestCase):
 
     def setUp(self):
-        self.peering = bgp.NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
+        self.peering = NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
         self.peering.setEnabledAddressFamilies({
             (AFI_INET, SAFI_UNICAST),
             (AFI_INET6, SAFI_UNICAST)})
@@ -655,10 +655,10 @@ class NaiveConstructAndSendTestCase(unittest.TestCase):
 
     def setUp(self):
         # Mock factory.log for less noisy output
-        self._log_patcher = mock.patch.object(bgp.BGPFactory, 'log')
+        self._log_patcher = mock.patch.object(BGPFactory, 'log')
         self._log_patcher.start()
 
-        self.peering = bgp.NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
+        self.peering = NaiveBGPPeering(myASN=64600, peerAddr='10.0.0.1')
         self.peering.setEnabledAddressFamilies({
             (AFI_INET, SAFI_UNICAST),
             (AFI_INET6, SAFI_UNICAST)})

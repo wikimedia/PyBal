@@ -10,7 +10,7 @@
 import pybal.bgpfailover
 import pybal.util
 
-from pybal.bgp import bgp, ip as bgpip, attributes
+from pybal.bgp import bgp, ip as bgpip, attributes, peering
 
 from twisted.internet.error import CannotListenError
 
@@ -68,7 +68,7 @@ class TestBGPFailover(PyBalTestCase):
         pybal.bgpfailover.BGPFailover(config)
 
     @mock.patch('pybal.bgpfailover.reactor.listenTCP')
-    @mock.patch('pybal.bgpfailover.bgp.NaiveBGPPeering')
+    @mock.patch('pybal.bgpfailover.bgppeering.NaiveBGPPeering')
     def testSetup(self, mock_peering, mock_listenTCP):
         # Test whether setup creates peerings
         self.bgpfailover.setup()
@@ -77,14 +77,14 @@ class TestBGPFailover(PyBalTestCase):
         self.assertSetEqual(set(self.bgpfailover.peerings.keys()), {"127.255.255.255", "::1"})
 
     @mock.patch('pybal.bgpfailover.reactor.addSystemEventTrigger')
-    @mock.patch('pybal.bgpfailover.bgp.NaiveBGPPeering')
+    @mock.patch('pybal.bgpfailover.bgppeering.NaiveBGPPeering')
     def testSetupStartException(self, mock_peering, mock_addSystemEventTrigger):
         # Test exception handling
         mock_addSystemEventTrigger.side_effect = ValueError("Mock")
         self.assertRaises(ValueError, self.bgpfailover.setup)
 
     @mock.patch('pybal.bgpfailover.reactor.listenTCP')
-    @mock.patch('pybal.bgpfailover.bgp.NaiveBGPPeering')
+    @mock.patch('pybal.bgpfailover.bgppeering.NaiveBGPPeering')
     def testSetupCannotListen(self, mock_peering, mock_listenTCP):
         mock_listenTCP.side_effect = CannotListenError(None, None, "Mocked")
         self.assertRaises(CannotListenError, self.bgpfailover.setup)
@@ -134,7 +134,7 @@ class TestBGPFailover(PyBalTestCase):
         self.assertRaises(ValueError, bgpfailover.buildAdvertisements)
 
     def testCloseSession(self):
-        mockPeering = mock.MagicMock(spec=bgp.NaiveBGPPeering)
+        mockPeering = mock.MagicMock(spec=peering.NaiveBGPPeering)
         mockPeering.peerAddr = "127.66.66.66"
         mockPeering.setAdvertisements = mock.MagicMock()
         mockPeering.manualStop = mock.MagicMock()

@@ -10,7 +10,7 @@
 from twisted.internet import task
 
 # BGP imports
-from .. import bgp, fsm
+from .. import bgp, fsm, peering
 from ..exceptions import NotificationSent
 from ..constants import ST_IDLE, ST_CONNECT, ST_ACTIVE, ST_OPENSENT, ST_OPENCONFIRM, ST_ESTABLISHED
 
@@ -79,7 +79,7 @@ class FSMDefinitionTestCase(unittest.TestCase):
 
     def setUp(self):
         self.fsm = fsm.FSM(
-            bgpPeering=mock.Mock(spec=bgp.BGPPeering),
+            bgpPeering=mock.Mock(spec=peering.BGPPeering),
             protocol=mock.Mock(spec=bgp.BGP)
         )
         # Mock self.fsm.log for less noisy output

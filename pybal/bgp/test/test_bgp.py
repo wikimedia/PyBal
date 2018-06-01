@@ -7,7 +7,7 @@
 
 """
 
-from .. import ip, bgp, fsm, exceptions, attributes
+from .. import ip, bgp, fsm, exceptions, attributes, peering
 
 import unittest, mock, struct
 
@@ -79,7 +79,7 @@ class BGPTestCase(unittest.TestCase):
                      b'\x00\x01\x00\x01\x01\x04\x00\x02\x00\x01')
 
     def setUp(self):
-        self.factory = bgp.BGPPeering(myASN=64600, peerAddr='127.0.0.1')
+        self.factory = peering.BGPPeering(myASN=64600, peerAddr='127.0.0.1')
         # FIXME: Should configure this in a better way in bgp.FSM
         self.factory.fsm.allowAutomaticStart = False
 
@@ -256,7 +256,7 @@ class BGPOpenParserTestCase(unittest.TestCase):
     MSG_OPEN_BGP_ID = ip.IPv4IP('4.4.4.4').ipToInt()
     def setUp(self):
         self.bgp = bgp.BGP()
-        self.bgp.bgpPeering = bgp.BGPPeering(myASN=65300, peerAddr='4.4.4.4')
+        self.bgp.bgpPeering = peering.BGPPeering(myASN=65300, peerAddr='4.4.4.4')
         self.bgp.openReceived = mock.MagicMock()
 
     def testParseOpen(self):
@@ -359,7 +359,7 @@ class BGPNonSupportedMsgParserTestCase(unittest.TestCase):
 
 class BGPUniqueLoggingTestCase(unittest.TestCase):
     def testLogImplementations(self):
-        classes = [('bgp', bgp.BGP), ('bgp', bgp.BGPFactory), ('fsm', fsm.FSM)]
+        classes = [('bgp', bgp.BGP), ('peering', peering.BGPFactory), ('fsm', fsm.FSM)]
         for m, c in classes:
             with mock.patch('pybal.bgp.{}._log'.format(m)) as logger:
                 instanceA = c()

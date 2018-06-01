@@ -11,7 +11,7 @@ from twisted.internet import reactor
 from twisted.internet.error import CannotListenError
 
 from pybal.util import log
-from pybal.bgp import bgp, attributes as attrs
+from pybal.bgp import bgp, peering as bgppeering, attributes as attrs
 from pybal.bgp.ip import IPv4IP, IPv6IP
 from pybal.metrics import Gauge
 
@@ -74,7 +74,7 @@ class BGPFailover:
             advertisements = self.buildAdvertisements()
 
             for peerAddr in self.peerAddresses:
-                peering = bgp.NaiveBGPPeering(self.myASN, peerAddr)
+                peering = bgppeering.NaiveBGPPeering(self.myASN, peerAddr)
                 peering.setEnabledAddressFamilies(set(self.prefixes.keys()))
                 peering.setAdvertisements(advertisements)
 
@@ -98,7 +98,7 @@ class BGPFailover:
                 try:
                     reactor.listenTCP(
                         bgp_local_port,
-                        bgp.BGPServerFactory(self.peerings),
+                        peering.BGPServerFactory(self.peerings),
                         interface=ip)
                 except CannotListenError as e:
                     log.critical(
