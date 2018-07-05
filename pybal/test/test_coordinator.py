@@ -438,3 +438,23 @@ class CoordinatorTestCase(PyBalTestCase):
 
         # The new server should have been added now.
         self.assertIn('shiny-new-server.eqiad.wmnet', self.coordinator.servers)
+
+    def testEnsureDepoolThreshold(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+            'cp1047.eqiad.wmnet': {},
+            'cp1048.eqiad.wmnet': {},
+        }
+
+        def isDepoolThresholdEnsured():
+            threshold = len(self.coordinator.servers) * self.coordinator.lvsservice.getDepoolThreshold()
+            pooledServerCount = sum(1 for server in self.coordinator.servers.itervalues() if server.pool)
+            return pooledServerCount >= threshold
+
+        self.setServers(servers, up=False, enabled=False, ready=True)   # calls onConfigUpdate
+        self.assertFalse(self.coordinator._ensureDepoolThreshold())
+        self.assertFalse(isDepoolThresholdEnsured())
+        self.setServers(servers, up=False, enabled=True, ready=True, pool=False)  # calls onConfigUpdate
+        self.assertTrue(self.coordinator._ensureDepoolThreshold())
+        self.assertTrue(isDepoolThresholdEnsured())

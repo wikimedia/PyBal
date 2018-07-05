@@ -292,6 +292,10 @@ class Coordinator:
 
         log.info("{} Initialization complete".format(self))
 
+        # Make sure that the updated list of enabled servers
+        # honors the depool threshold
+        self._ensureDepoolThreshold()
+
         # Assign the updated list of enabled servers to the LVSService instance
         self.assignServers()
 
@@ -299,7 +303,39 @@ class Coordinator:
             **self.metric_labels
             ).set(
                 sum(1 for s in self.servers.itervalues() if s.pool))
+        # FIXME: updateServerMetrics, may have changed in initialization
         self._updatePooledDownMetrics()
+
+    def _ensureDepoolThreshold(self):
+        """Ensure depool threshold is being honored on a new/updated config"""
+
+        threshold = len(self.servers) * self.lvsservice.getDepoolThreshold()
+        pooledServerCount = sum(1 for server in self.servers.itervalues() if server.pool)
+
+        # Compile a set of 'enabled' and 'ready' servers that we might pool, whether up or not.
+        # We can't pool servers that aren't ready yet (e.g. missing DNS IP resolution).
+        enabledReadyNotPooledServers = {server
+                                        for server
+                                        in self.servers.itervalues()
+                                        if server.enabled and server.ready and not server.pool}
+
+        while pooledServerCount < threshold and enabledReadyNotPooledServers:
+            # There are fewer servers pooled than required by the depool threshold.
+            # Pool some more until we meet the threshold.
+            server = enabledReadyNotPooledServers.pop()
+            server.pool = True
+            pooledServerCount += 1
+            self.pooledDownServers.add(server)
+            log.warn("{} Forcing {} to be pooled to meet depool threshold".format(
+                self, server.host))
+
+        if pooledServerCount < threshold:
+            log.critical("{} Could not ensure depool threshold; insufficient enabled & ready servers.".format(
+                self)
+            )
+            return False
+        else:
+            return True
 
     def _updateServerMetrics(self):
         """Update gauge metrics for servers on config change"""
