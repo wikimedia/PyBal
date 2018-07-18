@@ -354,10 +354,10 @@ class CoordinatorTestCase(PyBalTestCase):
         # cannot depool.
         self.assertFalse(self.coordinator.canDepool())
 
-    def testConfigServerRemoval(self):
+    def testConfigServerRemovalUpdate(self):
         """
-        Test whether servers that get deleted in configuration updates gets
-        removed by Pybal as well
+        Test whether servers that get added, deleted or updated in configuration
+        updates get added, removed or updated by Pybal as well.
         """
 
         servers = {
@@ -366,12 +366,40 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1047.eqiad.wmnet': {},
             'cp1048.eqiad.wmnet': {},
         }
-        self.setServers(servers, up=True, enabled=True) # calls onConfigUpdate
+        with mock.patch.object(self.coordinator,
+                               'refreshPreexistingServer') as mock_rPS:
+            self.setServers(servers, up=True, enabled=True) # calls onConfigUpdate
+        mock_rPS.assert_not_called()
 
         # Remove an arbitrary server from the configuration
         removedHostname = servers.popitem()[0]
         removedServer = self.coordinator.servers[removedHostname]
         removedServer.destroy = mock.Mock()
-        self.setServers(servers, up=True, enabled=True) # calls onConfigUpdate
+
+        # Update an arbitrary remaining server in the configuration
+        updatedHostname = next(iter(servers))
+        updatedServer = self.coordinator.servers[updatedHostname]
+        servers[updatedHostname]['enabled'] = 'False'
+        updatedServer.merge = mock.Mock()
+
+        preexistingServers = set(self.coordinator.servers.values()) - {removedServer}
+
+        # Add a new server
+        servers['shiny-new-server.eqiad.wmnet'] = {}
+        with mock.patch.object(self.coordinator,
+                               'refreshPreexistingServer') as mock_rPS:
+            self.setServers(servers) # calls onConfigUpdate
+
+        # Test removed server
         removedServer.destroy.assert_called()
         self.assertNotIn(removedServer, self.coordinator.servers)
+
+        # Test preexisting and updated servers
+        updatedServer.merge.assert_called_once_with(servers[updatedHostname])
+        # Was refreshPreexistingServer called for all preexisting servers?
+        self.assertEqual(len(mock_rPS.call_args_list), len(preexistingServers))
+        self.assertEqual({posargs[0] for posargs, kwargs in mock_rPS.call_args_list},
+                         preexistingServers)
+
+        # The new server should have been added now.
+        self.assertIn('shiny-new-server.eqiad.wmnet', self.coordinator.servers)
