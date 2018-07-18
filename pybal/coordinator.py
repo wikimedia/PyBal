@@ -91,13 +91,14 @@ class Coordinator:
 
     def assignServers(self):
         """
-        Takes a new set of servers (as a host->Server dict) and
-        hands them over to LVSService
+        Hands over the set of servers that should get pooled (.pool == True)
+        to LVSService
         """
 
-        # Hand over enabled servers to LVSService
+        # Hand over servers that should get pooled to LVSService
         self.lvsservice.assignServers(
-            set([server for server in self.servers.itervalues() if server.pool]))
+            {server for server in self.servers.itervalues() if server.pool}
+        )
 
     def refreshPreexistingServer(self, server):
         """
@@ -180,7 +181,7 @@ class Coordinator:
         self._updatePooledDownMetrics()
 
         # See if we can depool any servers that could not be depooled before
-        while len(self.pooledDownServers) > 0 and self.canDepool():
+        while self.pooledDownServers and self.canDepool():
             self.depool(self.pooledDownServers.pop())
 
     def canDepool(self):
@@ -196,7 +197,11 @@ class Coordinator:
         # threshold for the service the host belongs to. In that case, the
         # misbehaving server is kept pooled. This count does not include such
         # hosts.
-        upServerCount = len([server for server in self.servers.itervalues() if server.up and server.enabled])
+        upServerCount = sum(
+            1
+            for server
+            in self.servers.itervalues()
+            if server.up and server.enabled)
 
         # The total amount of hosts serving traffic may never drop below a
         # configured threshold
@@ -250,7 +255,7 @@ class Coordinator:
                 )
 
         if new_config:
-            enabled_servers = len([server for server in self.servers.itervalues() if server.enabled is True])
+            enabled_servers = sum(1 for server in self.servers.itervalues() if server.enabled)
             disabled_servers = len(self.servers) - enabled_servers
             util._log("Added {total} server(s): {enabled} enabled server(s) and {disabled} disabled server(s)".format(
                         total=len(self.servers),
@@ -285,7 +290,7 @@ class Coordinator:
         self.metrics['servers_pooled'].labels(
             **self.metric_labels
             ).set(
-                len([s for s in self.servers.itervalues() if s.pool]))
+                sum(1 for s in self.servers.itervalues() if s.pool))
         self._updatePooledDownMetrics()
 
     def _updateServerMetrics(self):
@@ -297,11 +302,11 @@ class Coordinator:
         self.metrics['servers_enabled'].labels(
             **self.metric_labels
             ).set(
-                len([s for s in self.servers.itervalues() if s.enabled]))
+                sum(1 for s in self.servers.itervalues() if s.enabled))
         self.metrics['servers_up'].labels(
             **self.metric_labels
             ).set(
-                len([s for s in self.servers.itervalues() if s.up]))
+                sum(1 for s in self.servers.itervalues() if s.up))
 
     def _updatePooledDownMetrics(self):
         """Update gauge metrics for pooled-but-down servers"""
@@ -310,4 +315,4 @@ class Coordinator:
             ).set(len(self.pooledDownServers))
         self.metrics['can_depool'].labels(
             **self.metric_labels
-            ).set(self.canDepool() and 1 or 0)
+            ).set(int(self.canDepool()))
