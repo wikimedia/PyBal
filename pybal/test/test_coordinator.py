@@ -110,7 +110,11 @@ class CoordinatorTestCase(PyBalTestCase):
         servers = {
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, up=True, enabled=False, ready=True)
+        self.setServers(servers,
+            up=True,
+            enabled=False,
+            ready=True,
+            calcStatus=mock.MagicMock(return_value=True))
         self.assertServerInvariants(coordinator=self.coordinator)
 
         for s in self.coordinator.servers.values():
@@ -243,12 +247,18 @@ class CoordinatorTestCase(PyBalTestCase):
         self.assertIn(cp1046, self.coordinator.pooledDownServers)
         self.assertServerInvariants(coordinator=self.coordinator)
 
-    def testRepool(self):
+    def testRepoolStandard(self):
         servers = {
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, up=True, enabled=True, pool=False, is_pooled=False, ready=True)
+        self.setServers(servers,
+            up=True,
+            enabled=True,
+            pool=False,
+            is_pooled=False,
+            ready=True,
+            calcStatus=mock.MagicMock(return_value=True))
 
         # The standard case
         cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
@@ -258,9 +268,24 @@ class CoordinatorTestCase(PyBalTestCase):
         self.assertTrue(cp1045.is_pooled)
         self.assertServerInvariants(cp1045, coordinator=self.coordinator)
 
+    def testRepoolPreviouslyPooledButDown(self):
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+
         # The previously-pooled-but-down case
-        self.setServers(servers, enabled=True, pool=True, is_pooled=True, up=False, ready=True)
+        self.setServers(servers,
+            enabled=True,
+            pool=True,
+            is_pooled=True,
+            up=False,
+            ready=True,
+            calcStatus=mock.MagicMock(return_value=False)
+        )
+
         # All known servers are pooled-but-down
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
         self.coordinator.pooledDownServers = set(self.coordinator.servers.itervalues())
         cp1045.up = True
         self.coordinator.repool(cp1045)

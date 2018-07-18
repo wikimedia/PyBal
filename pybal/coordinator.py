@@ -104,7 +104,7 @@ class Coordinator:
         Takes a preexisting server and calculates its .pool and .up status.
         """
 
-        server.up = server.calcStatus()
+        assert server.up == server.calcStatus(), "{} up status inconsistent".format(server.host)
         server.pool = server.enabled and server.up
 
     def resultDown(self, monitor, reason=None):
