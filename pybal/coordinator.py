@@ -206,7 +206,11 @@ class Coordinator:
         return upServerCount >= totalServerCount * self.lvsservice.getDepoolThreshold()
 
     def onConfigUpdate(self, config):
-        """Parses the server list and changes the state accordingly."""
+        """
+        Takes a dictionary of server hostnames to configuration dicts as the
+        complete set of new servers, and updates the state of the coordinator
+        accordingly.
+        """
 
         delServers = self.servers.copy()    # Shallow copy
 

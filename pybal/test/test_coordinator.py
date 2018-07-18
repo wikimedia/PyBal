@@ -46,14 +46,26 @@ class CoordinatorTestCase(PyBalTestCase):
                 call.cancel()
 
     def setServers(self, servers, **kwargs):
+        """
+        Takes a dictionary of server hostnames to a dict of (initial)
+        configuration values, and passes this to coordinator.onConfigUpdate,
+        which will construct new Server instances when necessary, and
+        ensure the coordinator uses this list as the complete set
+        of current servers.
+
+        After that, all servers will have their attributes updates from kwargs
+        for subsequent tests. No additional validation is done to ensure these
+        attributes and their values make sense.
+        """
+
+        # Pass the server list to coordinator.onConfigUpdate to ensure it's
+        # the complete new configuration/server list.
         with mock.patch.object(pybal.server.Server, 'initialize') as mock_initialize:
             self.coordinator.onConfigUpdate(config=servers)
 
+        # Update all servers with attributes from kwargs
         for server in self.coordinator.servers.itervalues():
-            server.up = True
-            server.enabled = True
-            for k, v in kwargs.iteritems():
-                setattr(server, k, v)
+            server.__dict__.update(kwargs)
 
     def testAssignServers(self):
         # All servers enabled and up
@@ -62,7 +74,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1046.eqiad.wmnet': {},
             'cp1047.eqiad.wmnet': {}
         }
-        self.setServers(servers, pool=True, is_pooled=True)
+        self.setServers(servers, up=True, enabled=True, pool=True, is_pooled=True)
 
         # All hosts should get assigned
         self.coordinator.assignServers()
@@ -94,7 +106,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, enabled=False, modified=True)
+        self.setServers(servers, up=True, enabled=False, modified=True)
 
         # cp1045 is not modified. It's down but pooled, pybal currently
         # doesn't touch it (which is probably a bug)
@@ -123,7 +135,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers)
+        self.setServers(servers, up=True, enabled=True)
         # All enabled and up, but not pooled
         self.assertTrue(all(
             server.enabled and server.up and not server.pool
@@ -151,7 +163,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, ready=True)
+        self.setServers(servers, up=True, enabled=True, ready=True)
 
         cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
         cp1045.up = False
@@ -195,7 +207,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, pool=True, is_pooled=True)
+        self.setServers(servers, up=True, enabled=True, pool=True, is_pooled=True)
         self.assertTrue(self.coordinator.canDepool()) # threshold is mocked at .5
 
         # 2/2 servers up, can depool
@@ -222,7 +234,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, pool=False, is_pooled=False, ready=True)
+        self.setServers(servers, up=True, enabled=True, pool=False, is_pooled=False, ready=True)
 
         # The standard case
         cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
@@ -232,7 +244,7 @@ class CoordinatorTestCase(PyBalTestCase):
         self.assertTrue(cp1045.is_pooled)
 
         # The previously-pooled-but-down case
-        self.setServers(servers, pool=True, is_pooled=True, ready=True)
+        self.setServers(servers, up=True, enabled=True, pool=True, is_pooled=True, ready=True)
         # All known servers are pooled-but-down
         self.coordinator.pooledDownServers = set(self.coordinator.servers.itervalues())
         self.coordinator.repool(cp1045)
@@ -253,7 +265,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers)
+        self.setServers(servers, up=True, enabled=True)
 
         # 2/2 hosts serving traffic. We can depool.
         self.assertTrue(self.coordinator.canDepool())
@@ -279,7 +291,7 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1047.eqiad.wmnet': {},
             'cp1048.eqiad.wmnet': {},
         }
-        self.setServers(servers)
+        self.setServers(servers, up=True, enabled=True)
 
         self.coordinator.servers['cp1045.eqiad.wmnet'].enabled = False
 
@@ -312,12 +324,12 @@ class CoordinatorTestCase(PyBalTestCase):
             'cp1047.eqiad.wmnet': {},
             'cp1048.eqiad.wmnet': {},
         }
-        self.setServers(servers)    # calls onConfigUpdate
+        self.setServers(servers, up=True, enabled=True) # calls onConfigUpdate
 
         # Remove an arbitrary server from the configuration
         removedHostname = servers.popitem()[0]
         removedServer = self.coordinator.servers[removedHostname]
         removedServer.destroy = mock.Mock()
-        self.setServers(servers)    # calls onConfigUpdate
+        self.setServers(servers, up=True, enabled=True) # calls onConfigUpdate
         removedServer.destroy.assert_called()
         self.assertNotIn(removedServer, self.coordinator.servers)
