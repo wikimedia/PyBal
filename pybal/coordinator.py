@@ -99,16 +99,13 @@ class Coordinator:
         self.lvsservice.assignServers(
             set([server for server in self.servers.itervalues() if server.pool]))
 
-    def refreshModifiedServers(self):
+    def refreshPreexistingServer(self, server):
         """
-        Calculates the status of every server that existed before the config change.
+        Takes a preexisting server and calculates its .pool and .up status.
         """
 
-        for server in self.servers.itervalues():
-            if not server.modified: continue
-
-            server.up = server.calcStatus()
-            server.pool = server.enabled and server.up
+        server.up = server.calcStatus()
+        server.pool = server.enabled and server.up
 
     def resultDown(self, monitor, reason=None):
         """
@@ -229,6 +226,8 @@ class Coordinator:
                 # Existing server. merge
                 server = delServers.pop(hostName)
                 server.merge(hostConfig)
+                # Calculate up status for the previously existing server
+                self.refreshPreexistingServer(server)
                 data = {'status': (server.enabled and "enabled" or "disabled"),
                         'host': hostName, 'weight': server.weight}
                 log.info(
@@ -267,9 +266,6 @@ class Coordinator:
                      system=self.lvsservice.name)
             server.destroy()
             del self.servers[hostName]
-
-        # Calculate up status for previously existing, modified servers
-        self.refreshModifiedServers()
 
         # Wait for all new servers to finish initializing
         self.serverInitDeferredList = defer.DeferredList(initList).addCallback(self._serverInitDone)

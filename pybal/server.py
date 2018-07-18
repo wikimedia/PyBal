@@ -59,7 +59,6 @@ class Server:
         self.pool = False
         self.enabled = True
         self.ready = False
-        self.modified = None
 
     def __eq__(self, other):
         return isinstance(other, Server) and self.host == other.host and self.lvsservice == other.lvsservice
@@ -263,7 +262,6 @@ class Server:
         # Overwrite configuration
         self.__dict__.update(filteredConfig)
         self.maintainState()
-        self.modified = True    # Indicate that this instance previously existed
 
     def dumpState(self):
         """Dump current state of the server"""
@@ -279,6 +277,5 @@ class Server:
 
         server = cls(hostName, lvsservice) # create a new instance...
         server.merge(configuration)        # ...and override attributes
-        server.modified = False
 
         return server

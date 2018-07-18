@@ -6,7 +6,9 @@
   This module contains tests for `pybal.coordinator`.
 
 """
+
 import mock
+import unittest
 
 import pybal.coordinator
 import pybal.server
@@ -104,38 +106,25 @@ class CoordinatorTestCase(PyBalTestCase):
         for server in self.coordinator.servers.itervalues():
             self.assertEquals(server.pool, server.is_pooled, server.host)
 
-    def testRefreshModifiedServers(self):
+    def testRefreshPreexistingServer(self):
         servers = {
-            'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
         }
-        self.setServers(servers, up=True, enabled=False, modified=True, ready=True)
+        self.setServers(servers, up=True, enabled=False, ready=True)
         self.assertServerInvariants(coordinator=self.coordinator)
 
-        # cp1045 is NOT modified. It's enabled, down but pooled, pybal currently
-        # doesn't touch it
-        # FIXME: This is probably a bug as depool threshold may no longer be hit.
-        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
-        cp1045.enabled = True
-        cp1045.modified = False
-        cp1045.up = False
-        cp1045.pool = True
-        cp1045.calcStatus = mock.MagicMock(return_value=cp1045.up)
+        for s in self.coordinator.servers.values():
+            self.coordinator.refreshPreexistingServer(s)
 
         self.assertServerInvariants(coordinator=self.coordinator)
 
-        self.coordinator.refreshModifiedServers()
+        cp1046 = self.coordinator.servers['cp1046.eqiad.wmnet']
+        cp1046.pool = True
 
-        # All modified servers should no longer have 'pool' set (disabled)
-        self.assertTrue(all(
-            not server.pool
-            for server in self.coordinator.servers.itervalues()
-            if server.modified))
+        self.coordinator.refreshPreexistingServer(cp1046)
 
-        # cp1045 shouldn't have been touched, as it was not modified
-        cp1045.calcStatus.assert_not_called()
-        self.assertTrue(cp1045.pool)
-
+        # cp1046 should no longer have 'pool' set (disabled)
+        self.assertFalse(cp1046.pool)
         self.assertServerInvariants(coordinator=self.coordinator)
 
     def testResultDown(self):

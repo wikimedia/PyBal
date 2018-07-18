@@ -227,5 +227,4 @@ class ServerTestCase(PyBalTestCase):
             configuration=self.exampleConfigDict,
             lvsservice=mock.MagicMock())
         self.assertTrue(isinstance(server, pybal.server.Server))
-        self.assertFalse(server.modified)
         self.assertServerInvariants(server)
