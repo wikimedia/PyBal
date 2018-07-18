@@ -38,7 +38,11 @@ class ServerTestCase(PyBalTestCase):
             'rogue': "this attribute should not be merged"
         }
 
+        self.assertServerInvariants(self.server)
+
     def tearDown(self):
+        self.assertServerInvariants(self.server)
+
         for call in reactor.getDelayedCalls():
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
@@ -49,6 +53,7 @@ class ServerTestCase(PyBalTestCase):
         server = pybal.server.Server(
             'example.com', self.lvsservice, addressFamily=socket.AF_INET6)
         self.assertEquals(server.addressFamily, socket.AF_INET6)
+        self.assertServerInvariants(server)
 
     def testEq(self):
         self.assertEquals(self.server, self.server)
@@ -149,6 +154,7 @@ class ServerTestCase(PyBalTestCase):
         self.server.removeMonitors()
         self.server.createMonitoringInstances(self.mockCoordinator)
         self.assertFalse(self.server.monitors)
+        self.assertServerInvariants(self.server)
 
         # Test a non-list in the configuration
         self.config['monitors'] = "(1,2)"
@@ -188,6 +194,7 @@ class ServerTestCase(PyBalTestCase):
         self.server.enabled = False
         self.server.maintainState()
         self.assertFalse(self.server.pool)
+        self.assertServerInvariants(self.server)
 
         self.server.pool = False
         self.server.enabled = True
@@ -221,3 +228,4 @@ class ServerTestCase(PyBalTestCase):
             lvsservice=mock.MagicMock())
         self.assertTrue(isinstance(server, pybal.server.Server))
         self.assertFalse(server.modified)
+        self.assertServerInvariants(server)

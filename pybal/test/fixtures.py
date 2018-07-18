@@ -131,3 +131,40 @@ class PyBalTestCase(twisted.trial.unittest.TestCase):
         self.server = ServerStub(self.host, self.ip, self.port,
                                  lvsservice=self.lvsservice)
         self.reactor = twisted.test.proto_helpers.MemoryReactorClock()
+
+    def assertServerInvariants(self, *servers, **kwargs):
+        """
+        Takes an iterable of servers (or fetches it from a passed-in
+        coordinator), and verifies whether the following invariants hold:
+            # P0: pool => enabled /\ ready
+            # P1: up => pool \/ !enabled \/ !ready
+            # P2: pool => up \/ !canDepool
+        """
+
+        coordinator = kwargs.get('coordinator', None)
+        # If no list of servers was passed, use coordinator.servers if we can
+        if not servers and coordinator:
+            servers = coordinator.servers.values()
+
+        for server in servers:
+            # P0
+            self.assertTrue(
+                not server.pool or
+                    (server.enabled and server.ready),
+                "P0, server {}".format(server.host)
+            )
+
+            # P1
+            self.assertTrue(
+                not server.up or
+                    (server.pool or not server.enabled or not server.ready),
+                "P1, server {}".format(server.host)
+            )
+
+            # P2, if we can check canDepool
+            if coordinator:
+                self.assertTrue(
+                    not server.pool or
+                        (server.up or not coordinator.canDepool()),
+                    "P2, server {}".format(server.host)
+                )
