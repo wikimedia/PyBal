@@ -11,3 +11,4 @@ etc/
 .pydevproject
 .settings
 .python-version
+.vscode/
