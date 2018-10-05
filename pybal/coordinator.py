@@ -102,11 +102,17 @@ class Coordinator:
 
     def refreshPreexistingServer(self, server):
         """
-        Takes a preexisting server and calculates its .pool and .up status.
+        Takes a preexisting server and calculates its new .pool status.
         """
 
         assert server.up == server.calcStatus(), "{} up status inconsistent".format(server.host)
-        server.pool = server.enabled and server.up
+
+        if server.pool and not server.up and server in self.pooledDownServers:
+            # If it was pooled, and is (still) enabled and ready but not up then
+            # it must have been due to the depool threshold. Let's not change that yet.
+            server.pool = server.enabled and server.ready
+        else:
+            server.pool = server.enabled and server.ready and server.up
 
     def resultDown(self, monitor, reason=None):
         """

@@ -109,6 +109,7 @@ class CoordinatorTestCase(PyBalTestCase):
     def testRefreshPreexistingServer(self):
         servers = {
             'cp1046.eqiad.wmnet': {},
+            'cp1047.eqiad.wmnet': {},
         }
         self.setServers(servers,
             up=True,
@@ -130,6 +131,35 @@ class CoordinatorTestCase(PyBalTestCase):
         # cp1046 should no longer have 'pool' set (disabled)
         self.assertFalse(cp1046.pool)
         self.assertServerInvariants(coordinator=self.coordinator)
+
+    def testRefreshPreexistingServerDownButPooled(self):
+        servers = {
+            'cp1046.eqiad.wmnet': {},
+            'cp1047.eqiad.wmnet': {},
+        }
+        self.setServers(servers,
+            up=True,
+            enabled=False,
+            ready=True,
+            calcStatus=mock.MagicMock(return_value=True))
+        self.assertServerInvariants(coordinator=self.coordinator)
+
+        # Test down-but-pooled case
+        cp1047 = self.coordinator.servers['cp1047.eqiad.wmnet']
+        cp1047.enabled = True
+        cp1047.pool = True
+        cp1047.up = False
+        cp1047.calcStatus=mock.MagicMock(return_value=False)
+        self.coordinator.pooledDownServers.add(cp1047)
+
+        self.assertServerInvariants(coordinator=self.coordinator)
+
+        self.coordinator.refreshPreexistingServer(cp1047)
+
+        # cp1047 should still be pooled
+        self.assertTrue(cp1047.pool)
+        self.assertServerInvariants(coordinator=self.coordinator)
+
 
     def testResultDown(self):
         servers = {
