@@ -303,7 +303,7 @@ class Coordinator:
             **self.metric_labels
             ).set(
                 sum(1 for s in self.servers.itervalues() if s.pool))
-        # FIXME: updateServerMetrics, may have changed in initialization
+        self._updateServerMetrics()  # may have changed in initialization
         self._updatePooledDownMetrics()
 
     def _ensureDepoolThreshold(self):
