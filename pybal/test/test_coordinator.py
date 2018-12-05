@@ -15,6 +15,7 @@ import pybal.server
 import pybal.util
 
 from twisted.internet.reactor import getDelayedCalls
+from twisted.internet import defer
 
 from .fixtures import PyBalTestCase
 
@@ -47,6 +48,7 @@ class CoordinatorTestCase(PyBalTestCase):
             if call.func.func_name == 'maybeParseConfig':
                 call.cancel()
 
+    @defer.inlineCallbacks
     def setServers(self, servers, **kwargs):
         """
         Takes a dictionary of server hostnames to a dict of (initial)
@@ -55,15 +57,18 @@ class CoordinatorTestCase(PyBalTestCase):
         ensure the coordinator uses this list as the complete set
         of current servers.
 
-        After that, all servers will have their attributes updates from kwargs
+        AFTER that, all servers will have their attributes updates from kwargs
         for subsequent tests. No additional validation is done to ensure these
-        attributes and their values make sense.
+        attributes and their values make sense, and onConfigUpdate is NOT called
+        called with the new values.
         """
 
         # Pass the server list to coordinator.onConfigUpdate to ensure it's
         # the complete new configuration/server list.
-        with mock.patch.object(pybal.server.Server, 'initialize') as mock_initialize:
-            self.coordinator.onConfigUpdate(config=servers)
+        with mock.patch.object(pybal.server.Server,
+                               'initialize',
+                               return_value=defer.succeed(True)) as mock_initialize:
+            yield self.coordinator.onConfigUpdate(config=servers)
 
         # Update all servers with attributes from kwargs
         for server in self.coordinator.servers.itervalues():

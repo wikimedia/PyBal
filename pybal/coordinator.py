@@ -285,6 +285,8 @@ class Coordinator:
         self._updateServerMetrics()
         self._updatePooledDownMetrics()
 
+        return self.serverInitDeferredList
+
     def _serverInitDone(self, result):
         """Called when all (new) servers have finished initializing"""
 
