@@ -140,8 +140,14 @@ class Coordinator:
         """
 
         server = monitor.server
+        # Test whether this is the last monitor to return a first result
+        # This monitor's firstCheck should still be True, and all others should be False
+        firstChecksCompleted = monitor.firstCheck and not any(mon.firstCheck
+                                                              for mon
+                                                              in server.monitors
+                                                              if mon != monitor)
 
-        if not server.up and server.calcStatus():
+        if (not server.up or firstChecksCompleted) and server.calcStatus():
             log.info("Server {} ({}) is up".format(server.host,
                                                    server.textStatus()),
                      system=self.lvsservice.name)
@@ -179,7 +185,7 @@ class Coordinator:
             self.lvsservice.addServer(server)
             self.metrics['servers_pooled'].labels(**self.metric_labels).inc()
         else:
-            msg = "Leaving previously pooled but down server {} pooled"
+            msg = "Leaving previously pooled server {} pooled"
             log.info(msg.format(server.host), system=self.lvsservice.name)
 
         # If it had been pooled in down state before, remove it from the list

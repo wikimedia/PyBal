@@ -90,9 +90,9 @@ class MonitoringProtocol(object):
         self.metrics['up_results_total'].labels(**self.metric_labels).inc()
         if self.active and self.up is False or self.firstCheck:
             self.up = True
-            self.firstCheck = False
             if self.coordinator:
                 self.coordinator.resultUp(self)
+            self.firstCheck = False
 
             self.metrics['up_transitions_total'].labels(**self.metric_labels).inc()
             self.metrics['status'].labels(**self.metric_labels).set(1)
@@ -103,9 +103,9 @@ class MonitoringProtocol(object):
         self.metrics['down_results_total'].labels(**self.metric_labels).inc()
         if self.active and self.up is True or self.firstCheck:
             self.up = False
-            self.firstCheck = False
             if self.coordinator:
                 self.coordinator.resultDown(self, reason)
+            self.firstCheck = False
 
             self.metrics['down_transitions_total'].labels(**self.metric_labels).inc()
             self.metrics['status'].labels(**self.metric_labels).set(0)

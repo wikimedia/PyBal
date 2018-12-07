@@ -178,7 +178,7 @@ class CoordinatorTestCase(PyBalTestCase):
             server.enabled and server.up and not server.pool
             for server in self.coordinator.servers.itervalues()))
 
-        mockMonitor = mock.MagicMock()
+        mockMonitor = mock.Mock(spec=pybal.monitor.MonitoringProtocol)
         cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
         mockMonitor.server = cp1045
 
@@ -210,8 +210,7 @@ class CoordinatorTestCase(PyBalTestCase):
         cp1045.up = False
         cp1045.calcStatus = mock.MagicMock(return_value=False)
 
-        mockMonitor = mock.MagicMock()
-        mockMonitor.server = cp1045
+        mockMonitor = mock.Mock(spec=pybal.monitor.MonitoringProtocol, server=cp1045, firstCheck=False)
 
         with mock.patch.object(self.coordinator, 'repool') as mockRepool:
             # Another monitor is still down, nothing should happen
@@ -252,6 +251,64 @@ class CoordinatorTestCase(PyBalTestCase):
             mockRepool.assert_not_called()
             self.assertServerInvariants(mockMonitor.server,
                                         coordinator=self.coordinator)
+
+    def testResultUpFirstCheck(self):
+        """
+        Tests whether a Coordinator.resultUp depools any previously down-but-pooled
+        servers if possible, on the first check result.
+        """
+
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+
+        self.setServers(servers, enabled=True, pool=True, is_pooled=True, ready=True)
+        self.assertServerInvariants(coordinator=self.coordinator)
+
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        cp1046 = self.coordinator.servers['cp1046.eqiad.wmnet']
+
+        # cp1045 was up and pooled from initial initialization
+        cp1045.up = True
+        # cp1046 was down-but-pooled
+        cp1046.up = False
+        self.coordinator.pooledDownServers = {cp1046}
+
+        # All of cp1045's monitors are now Up
+        for i in range(2):
+            cp1045.addMonitor(mock.Mock(spec=pybal.monitor.MonitoringProtocol,
+                                        name='monitor{}'.format(i),
+                                        server=cp1045,
+                                        up=True,
+                                        firstCheck=True))
+
+
+        aMonitor = next(iter(cp1045.monitors))
+        with mock.patch.object(self.coordinator, 'repool') as mockRepool:
+            self.coordinator.resultUp(aMonitor)
+        self.assertTrue(cp1045.up)
+        self.assertTrue(cp1045.pool)
+        self.assertTrue(cp1045.is_pooled)
+        # repool should not have been called, because first checks had not completed.
+        mockRepool.assert_not_called()
+
+        # Test the case where the last cp1045 monitor (aMonitor) reports a result
+        for monitor in cp1045.monitors:
+            monitor.firstCheck = False
+        aMonitor.firstCheck = True
+        self.coordinator.resultUp(aMonitor)
+        self.assertTrue(cp1045.up)
+        self.assertTrue(cp1045.pool)
+        self.assertTrue(cp1045.is_pooled)
+
+        # With depool threshold at 0.5, cp1046 should have been depooled by repool()
+        self.assertEqual(self.coordinator.lvsservice.getDepoolThreshold(), 0.5)
+        self.coordinator.lvsservice.removeServer.assert_called_once_with(cp1046)
+        self.assertFalse(cp1046.pool)
+        self.assertFalse(cp1046.is_pooled)
+        self.assertFalse(self.coordinator.pooledDownServers)
+        self.assertServerInvariants(coordinator=self.coordinator)
 
     def testDepool(self):
         servers = {
@@ -303,7 +360,38 @@ class CoordinatorTestCase(PyBalTestCase):
         self.assertTrue(cp1045.is_pooled)
         self.assertServerInvariants(cp1045, coordinator=self.coordinator)
 
+    def testRepoolPreviouslyPooled(self):
+        """
+        Tests Coordinator.repool behavior when a server is already pooled but up
+        (like on the first check result).
+        """
+
+        servers = {
+            'cp1045.eqiad.wmnet': {},
+            'cp1046.eqiad.wmnet': {},
+        }
+        self.setServers(servers,
+            up=True,
+            enabled=True,
+            pool=True,
+            is_pooled=True,
+            ready=True,
+            calcStatus=mock.MagicMock(return_value=True))
+
+        # One server up and already pooled (like on first check)
+        cp1045 = self.coordinator.servers['cp1045.eqiad.wmnet']
+        self.coordinator.repool(cp1045)
+        self.assertTrue(cp1045.pool)
+        self.coordinator.lvsservice.addServer.assert_not_called()
+        self.assertTrue(cp1045.is_pooled)
+        self.assertServerInvariants(cp1045, coordinator=self.coordinator)
+
     def testRepoolPreviouslyPooledButDown(self):
+        """
+        Tests Coordinator.repool behavior when a server is already pooled and down
+        (because of depool threshold)
+        """
+
         servers = {
             'cp1045.eqiad.wmnet': {},
             'cp1046.eqiad.wmnet': {},
@@ -325,6 +413,7 @@ class CoordinatorTestCase(PyBalTestCase):
         cp1045.up = True
         self.coordinator.repool(cp1045)
         self.assertTrue(cp1045.pool)
+        self.coordinator.lvsservice.addServer.assert_not_called()
         self.assertTrue(cp1045.is_pooled)
         self.assertNotIn(cp1045, self.coordinator.pooledDownServers)
 
