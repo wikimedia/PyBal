@@ -4,6 +4,9 @@ Copyright (C) 2006 by Mark Bergsma <mark@nedworks.org>
 
 Monitor class implementations for PyBal
 """
+import hashlib
+import logging
+import random
 
 from pybal import monitor, util
 from pybal.metrics import Gauge
@@ -11,7 +14,7 @@ from pybal.metrics import Gauge
 from twisted.internet import reactor, defer
 from twisted.web import client
 from twisted.python.runtime import seconds
-import logging, random
+
 
 log = util.log
 
@@ -45,6 +48,8 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
 
     HTTP_STATUS = 200
 
+    CHECK_ALL = False
+
     __name__ = 'ProxyFetch'
 
     from twisted.internet import error
@@ -61,7 +66,7 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         'request_duration_seconds': Gauge(
             'request_duration_seconds',
             'HTTP(S) request duration',
-            labelnames=metric_labelnames + ('result',), # TODO: statuscode
+            labelnames=metric_labelnames + ('result', 'url', ), # TODO: statuscode
             **metric_keywords)
     }
 
@@ -77,11 +82,17 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
                                                  self.HTTP_STATUS)
 
         self.checkCall = None
-        self.getPageDeferred = None
+        self.URLs = self._getConfigStringList('url')
+        self.checkAllUrls = self._getConfigBool('check_all', self.CHECK_ALL)
+        self.getPageDeferredList = None
 
         self.checkStartTime = None
-
-        self.URL = self._getConfigStringList('url')
+        self.currentFailures = []
+        # Maximum number of failures to tolerate:
+        if self.checkAllUrls:
+            self.maxFailures = self._getConfigInt('max_failures', 0)
+        else:
+            self.maxFailures = 0
 
     def run(self):
         """Start the monitoring"""
@@ -99,8 +110,8 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
         if self.checkCall and self.checkCall.active():
             self.checkCall.cancel()
 
-        if self.getPageDeferred is not None:
-            self.getPageDeferred.cancel()
+        if self.getPageDeferredList is not None:
+            self.getPageDeferredList.cancel()
 
     def check(self):
         """Periodically called method that does a single uptime check."""
@@ -111,52 +122,67 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
 
         # FIXME: Use GET as a workaround for a Twisted bug with HEAD/Content-length
         # where it expects a body and throws a PartialDownload failure
+        if not self.checkAllUrls:
+            urls = [random.choice(self.URLs)]
+        else:
+            urls = self.URLs
+        self.checkStartTime = {self._keyFromUrl(url): None for url in self.URLs}
+        self.currentFailures = []
 
-        url = random.choice(self.URL)
+        deferreds = []
+        for url in urls:
+            self.checkStartTime[self._keyFromUrl(url)] = seconds()
+            deferred = self.getProxyPage(
+                url,
+                method='GET',
+                host=self.server.ip,
+                port=self.server.port,
+                status=self.expectedStatus,
+                timeout=self.toGET,
+                followRedirect=False,
+                reactor=self.reactor
+            ).addCallback(
+                self._fetchSuccessful,
+                url=url
+            ).addErrback(
+                self._fetchFailed,
+                url=url
+            )
+            deferreds.append(deferred)
+        self.getPageDeferredList = defer.DeferredList(deferreds).addBoth(
+            self._checkFinished)
+        return self.getPageDeferredList
 
-        self.checkStartTime = seconds()
-        self.getPageDeferred = self.getProxyPage(
-            url,
-            method='GET',
-            host=self.server.ip,
-            port=self.server.port,
-            status=self.expectedStatus,
-            timeout=self.toGET,
-            followRedirect=False
-        ).addCallbacks(
-            self._fetchSuccessful,
-            self._fetchFailed
-        ).addBoth(self._checkFinished)
-
-    def _fetchSuccessful(self, result):
+    def _fetchSuccessful(self, result, url=None):
         """Called when getProxyPage is finished successfully."""
-
-        duration = seconds() - self.checkStartTime
-        self.report('Fetch successful, %.3f s' % (duration))
-        self._resultUp()
+        # Here we don't add anything to self.currentFailures.
+        duration = seconds() - self.checkStartTime[self._keyFromUrl(url)]
+        self.report('Fetch successful (%s), %.3f s' % (url, duration))
 
         self.proxyfetch_metrics['request_duration_seconds'].labels(
             result='successful',
+            url=url,
             **self.metric_labels
             ).set(duration)
 
         return result
 
-    def _fetchFailed(self, failure):
+    def _fetchFailed(self, failure, url=None):
         """Called when getProxyPage finished with a failure."""
 
         # Don't act as if the check failed if we cancelled it
         if failure.check(defer.CancelledError):
             return None
 
-        duration = seconds() - self.checkStartTime
-        self.report('Fetch failed, %.3f s' % (duration),
+        duration = seconds() - self.checkStartTime[self._keyFromUrl(url)]
+        self.report('Fetch failed (%s), %.3f s' % (url, duration),
                     level=logging.WARN)
 
-        self._resultDown(failure.getErrorMessage())
+        self.currentFailures.append(failure.getErrorMessage())
 
         self.proxyfetch_metrics['request_duration_seconds'].labels(
             result='failed',
+            url=url,
             **self.metric_labels
             ).set(duration)
 
@@ -164,16 +190,20 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
 
     def _checkFinished(self, result):
         """
-        Called when getProxyPage finished with either success or failure,
-        to do after-check cleanups.
+        Called when all getProxyPage finished with either success or failure,
+        to do after-check cleanups and fire reportDown or reportUp.
         """
-
         self.checkStartTime = None
 
         # Schedule the next check
         if self.active:
             self.checkCall = reactor.callLater(self.intvCheck, self.check)
 
+        if len(self.currentFailures) <= self.maxFailures:
+            self._resultUp()
+        else:
+            self._resultDown(reason="\n".join(self.currentFailures))
+        self.currentFailures = []
         return result
 
     def getProxyPage(url, contextFactory=None, host=None, port=None,
@@ -202,3 +232,8 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
             reactor.connectTCP(host, port, factory)
         return factory.deferred
     getProxyPage = staticmethod(getProxyPage)
+
+    @staticmethod
+    def _keyFromUrl(url):
+        """Create a dict key from a url."""
+        return hashlib.md5(url).hexdigest()
