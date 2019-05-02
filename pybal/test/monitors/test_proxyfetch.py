@@ -37,10 +37,12 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitori
         self.assertEquals(monitor.intvCheck, ProxyFetchMonitoringProtocol.INTV_CHECK)
         self.assertEquals(monitor.toGET, ProxyFetchMonitoringProtocol.TIMEOUT_GET)
         self.assertEquals(monitor.expectedStatus, ProxyFetchMonitoringProtocol.HTTP_STATUS)
-        self.assertEquals(monitor.URL, ["http://en.wikipedia.org/test.php"])
+        self.assertEquals(monitor.URLs, ["http://en.wikipedia.org/test.php"])
         self.assertIsNone(monitor.checkCall)
-        self.assertIsNone(monitor.getPageDeferred)
+        self.assertIsNone(monitor.getPageDeferredList)
         self.assertIsNone(monitor.checkStartTime)
+        self.assertFalse(monitor.checkAllUrls)
+        self.assertEqual(monitor.maxFailures, 0)
 
         # cleanup
         monitor.stop()
@@ -50,10 +52,27 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitori
         with self.assertRaises(Exception):
             monitor = ProxyFetchMonitoringProtocol(None, self.server, self.config)
 
+    def testInitMultipleChecks(self):
+        config = pybal.util.ConfigDict()
+        config['proxyfetch.url'] = '["http://en.wikipedia.org/test.php", "http://de.wikipedia.org/test.php"]'
+        config['proxyfetch.check_all'] = True
+        monitor = ProxyFetchMonitoringProtocol(None, self.server, config)
+        self.assertTrue(monitor.checkAllUrls)
+        self.assertEqual(monitor.maxFailures, 0)
+        monitor.stop()
+        config['proxyfetch.max_failures'] = 1
+        monitor = ProxyFetchMonitoringProtocol(None, self.server, config)
+        self.assertEqual(monitor.maxFailures, 1)
+        monitor.stop()
+        del config['proxyfetch.check_all']
+        monitor = ProxyFetchMonitoringProtocol(None, self.server, config)
+        self.assertEqual(monitor.maxFailures, 0)
+        monitor.stop()
+
     def testStopCallsCancelled(self):
         self.monitor.run()
-        with mock.patch.object(self.monitor, 'getPageDeferred',
-            spec=defer.Deferred) as m_getPageDeferred:
+        with mock.patch.object(self.monitor, 'getPageDeferredList',
+                               spec=defer.DeferredList) as m_getPageDeferred:
             self.monitor.stop()
         m_getPageDeferred.cancel.assert_called()
 
@@ -68,8 +87,8 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitori
             mocks['getProxyPage'].return_value = defer.Deferred()
             d = self.monitor.check()
 
-        self.assertIsInstance(d, defer.Deferred)
-        self.assertGreaterEqual(self.monitor.checkStartTime, startSeconds)
+        self.assertIsInstance(d, defer.DeferredList)
+        self.assertGreaterEqual(self.monitor.checkStartTime.values()[0], startSeconds)
 
         # Check getProxyPage keyword arguments
         kwargs = mocks['getProxyPage'].call_args[1]
@@ -82,9 +101,12 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitori
 
         # Check whether the callback works
         testResult = "Test page"
-        self.monitor.getPageDeferred.callback(testResult)
+        self.monitor.getPageDeferredList._deferredList[0].callback(testResult)
 
-        mocks['_fetchSuccessful'].assert_called_once_with(testResult)
+        mocks['_fetchSuccessful'].assert_called_once_with(
+            testResult,
+            url='http://en.wikipedia.org/test.php'
+        )
         mocks['_fetchFailed'].assert_not_called()
         mocks['_checkFinished'].assert_called()
 
@@ -100,9 +122,12 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitori
 
         # Check whether the callback works
         testFailure = failure.Failure(defer.TimeoutError("Test failure"))
-        self.monitor.getPageDeferred.errback(testFailure)
+        self.monitor.getPageDeferredList._deferredList[0].errback(testFailure)
 
-        mocks['_fetchFailed'].assert_called_once_with(testFailure)
+        mocks['_fetchFailed'].assert_called_once_with(
+            testFailure,
+            url='http://en.wikipedia.org/test.php'
+        )
         mocks['_fetchSuccessful'].assert_not_called()
         mocks['_checkFinished'].assert_called()
 
@@ -112,60 +137,178 @@ class ProxyFetchMonitoringProtocolTestCase(test_monitor.BaseLoopingCheckMonitori
         """
 
         self.monitor.active = False
-        self.monitor.getPageDeferred = mock.sentinel.someDeferred
+        self.monitor.getPageDeferredList = mock.sentinel.someDeferred
         self.monitor.check()
         # Should still be the same (sentinel) deferred
-        self.assertIs(self.monitor.getPageDeferred, mock.sentinel.someDeferred)
+        self.assertIs(self.monitor.getPageDeferredList,
+                      mock.sentinel.someDeferred)
+
+    def testCheckMultiSuccess(self):
+        """If all urls are retrieved correctly, monitor is up."""
+        self.monitor.checkAllUrls = True
+        self.monitor.active = True
+        self.monitor.URLs = [
+            'http://www.example.com',
+            'http://www1.example.com'
+        ]
+        clock = task.Clock()
+        checkCall = task.LoopingCall(self.monitor.check)
+        checkCall.clock = clock
+        self.monitor.getProxyPage = mock.MagicMock(
+            return_value=defer.Deferred()
+        )
+        self.assertTrue(self.monitor.firstCheck)
+        checkCall.start(200)
+
+        def to_test(result):
+            self.assertEqual(self.monitor.currentFailures, [])
+            self.assertEqual(self.monitor.getProxyPage.call_count, 2)
+            self.assertTrue(self.monitor.up)
+            return result
+        checkCall.deferred.addCallback(to_test)
+        checkCall.stop()
+
+    def testCheckMultiFailure(self):
+        self.monitor.checkAllUrls = True
+        self.monitor.active = True
+        self.monitor.URLs = [
+            'http://www.example.com',
+            'http://www1.example.com'
+        ]
+        clock = task.Clock()
+        checkCall = task.LoopingCall(self.monitor.check)
+        checkCall.clock = clock
+        testFailure = defer.fail(defer.TimeoutError("Test failure"))
+        self.monitor.getProxyPage = mock.MagicMock(
+            side_effect=[defer.Deferred(), testFailure]
+        )
+        checkCall.start(200)
+        # before _checkFinished is fired
+        self.assertEqual(self.monitor.currentFailures, ["Test failure"])
+
+        def to_test(result):
+            self.assertEqual(self.monitor.getProxyPage.call_count, 2)
+            self.assertFalse(self.monitor.up)
+            self.assertEqual(self.monitor.currentFailures, [])
+            return result
+        checkCall.deferred.addCallback(
+            to_test
+        )
+        checkCall.stop()
+
+    def testCheckMultiMaxFailures(self):
+        self.monitor.checkAllUrls = True
+        self.monitor.active = True
+        self.monitor.maxFailures = 1
+        self.monitor.URLs = [
+            'http://www.example.com',
+            'http://www1.example.com'
+        ]
+        clock = task.Clock()
+        checkCall = task.LoopingCall(self.monitor.check)
+        checkCall.clock = clock
+        testFailure = defer.fail(defer.TimeoutError("Test failure"))
+        self.monitor.getProxyPage = mock.MagicMock(
+            side_effect=[defer.Deferred(), testFailure]
+        )
+        checkCall.start(200)
+        # before _checkFinished is fired
+        self.assertEqual(self.monitor.currentFailures, ["Test failure"])
+
+        def to_test(result):
+            self.assertEqual(self.monitor.getProxyPage.call_count, 2)
+            self.assertTrue(self.monitor.up)
+            self.assertEqual(self.monitor.currentFailures, [])
+            return result
+        checkCall.deferred.addCallback(
+            to_test
+        )
+        checkCall.stop()
 
     def testFetchSuccessful(self):
         testResult = "Test page result"
-        self.monitor.checkStartTime = seconds()
-        with mock.patch.object(self.monitor, '_resultUp') as mock_resultUp:
-            r = self.monitor._fetchSuccessful(testResult)
-        mock_resultUp.assert_called_once()
+        url = 'http://en.wikipedia.org/wiki/Main_Page'
+        self.monitor.checkStartTime = {
+            self.monitor._keyFromUrl(url): seconds()
+        }
+        with mock.patch.object(self.monitor,
+                               'report', mock.DEFAULT) as report:
+            pm = self.monitor.proxyfetch_metrics['request_duration_seconds']
+            pm.labels = mock.MagicMock()
+            r = self.monitor._fetchSuccessful(testResult, url=url)
+        report.assert_called_once()
+        pm.labels.assert_called_with(
+            result='successful',
+            url=url,
+            **self.monitor.metric_labels
+        )
         self.assertIs(r, testResult)
+        self.assertEqual(len(self.monitor.currentFailures), 0)
 
     def testFetchFailed(self):
         testMessage = "Testing failed fetches"
+        url = 'http://en.wikipedia.org/wiki/Main_Page'
         testFailure = failure.Failure(defer.TimeoutError(testMessage))
-        self.monitor.checkStartTime = seconds()
-        with mock.patch.object(self.monitor, '_resultDown') as mock_resultDown:
-            self.monitor._fetchFailed(testFailure)
-        mock_resultDown.assert_called_once()
+        self.monitor.checkStartTime = {
+            self.monitor._keyFromUrl(url): seconds()
+        }
+        self.assertEqual(len(self.monitor.currentFailures), 0)
+        with mock.patch.object(self.monitor,
+                                 'report',
+                                 mock.DEFAULT) as report:
+            pm = self.monitor.proxyfetch_metrics['request_duration_seconds']
+            pm.labels = mock.MagicMock()
+            self.monitor._fetchFailed(testFailure, url=url)
+        report.assert_called_once()
+        pm.labels.assert_called_with(
+            result='failed',
+            url=url,
+            **self.monitor.metric_labels
+        )
+        self.assertEqual(self.monitor.currentFailures,
+                         [testFailure.getErrorMessage()])
 
     def testFetchFailedCancelled(self):
         testFailure = failure.Failure(defer.CancelledError())
-        with mock.patch.object(self.monitor, '_resultDown') as mock_resultDown:
-            r = self.monitor._fetchFailed(testFailure)
+        url = 'http://en.wikipedia.org/wiki/Main_Page'
+        r = self.monitor._fetchFailed(testFailure, url)
         self.assertIsNone(r)
-        mock_resultDown.assert_not_called()
+        self.assertEqual(len(self.monitor.currentFailures), 0)
 
     def testFetchFailedNotTrapped(self):
         testMessage = "Testing failed fetches"
+        url = 'http://en.wikipedia.org/wiki/Main_Page'
         testFailure = failure.Failure(Exception(testMessage))
-        self.monitor.checkStartTime = seconds()
-        with mock.patch.object(self.monitor, '_resultDown') as mock_resultDown:
-            # Twisted raises either the wrapped exception or the Failure itself
-            with self.assertRaises((failure.Failure, testFailure.type)):
-                self.monitor._fetchFailed(testFailure)
-        mock_resultDown.assert_called_once()
+        self.monitor.checkStartTime = {
+            self.monitor._keyFromUrl(url): seconds()
+        }
+        self.assertEqual(self.monitor.currentFailures, [])
+        # Twisted raises either the wrapped exception or the Failure itself
+        with self.assertRaises((failure.Failure, testFailure.type)):
+            self.monitor._fetchFailed(testFailure, url=url)
         testFailure.trap(testFailure.type)
+        # Failure raise an exception, but still be recorded
+        self.assertEqual(self.monitor.currentFailures,
+                         [testFailure.getErrorMessage()])
 
     def testCheckFinished(self):
         testResult = "Test page result"
-
-        r = self.monitor._checkFinished(testResult)
-
+        with mock.patch.object(self.monitor, '_resultUp') as mock_up:
+            r = self.monitor._checkFinished(testResult)
+        mock_up.assert_called_once()
         self.assertIs(r, testResult)
         self.assertIsNone(self.monitor.checkStartTime)
+        self.assertEqual(self.monitor.currentFailures, [])
 
     def testCheckFinishedFailure(self):
-        testFailure = twisted.internet.error.ConnectError("Testing a connect error")
-
-        r = self.monitor._checkFinished(testFailure)
-
+        testFailure = failure.Failure(twisted.internet.error.ConnectError("Testing a connect error"))
+        self.monitor.currentFailures = [testFailure.getErrorMessage()]
+        with mock.patch.object(self.monitor, '_resultDown') as mock_down:
+            r = self.monitor._checkFinished(testFailure)
+        mock_down.assert_called_with(reason=testFailure.getErrorMessage())
         self.assertIs(r, testFailure)
         self.assertIsNone(self.monitor.checkStartTime)
+        self.assertEqual(self.monitor.currentFailures, [])
 
     def testGetProxyPageHTTP(self):
         testURL = "http://en.wikipedia.org/"
