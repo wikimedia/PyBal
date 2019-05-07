@@ -1,3 +1,8 @@
+pybal (1.15.5) stretch-wikimedia; urgency=medium
+  * Rollback kubernetes configuration observer due to a dependency issue on jessie
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Tue, 07 May 2019 16:35:22 +0200
+
 pybal (1.15.4) stretch-wikimedia; urgency=medium
   * Allow proxyfetch to check more than one url at a time
   * Avoid Deferred.cancel() induced CancelledErrors
