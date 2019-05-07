@@ -139,8 +139,7 @@ class ProxyFetchMonitoringProtocol(monitor.MonitoringProtocol):
                 port=self.server.port,
                 status=self.expectedStatus,
                 timeout=self.toGET,
-                followRedirect=False,
-                reactor=self.reactor
+                followRedirect=False
             ).addCallback(
                 self._fetchSuccessful,
                 url=url
