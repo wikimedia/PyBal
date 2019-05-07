@@ -1,3 +1,8 @@
+pybal (1.15.6) stretch-wikimedia; urgency=medium
+  * Fix proxy fetch multi URL cherry-pick
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Tue, 07 May 2019 17:32:34 +0200
+
 pybal (1.15.5) stretch-wikimedia; urgency=medium
   * Rollback kubernetes configuration observer due to a dependency issue on jessie
 
