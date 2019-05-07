@@ -1,3 +1,13 @@
+pybal (1.15.4) stretch-wikimedia; urgency=medium
+  * Allow proxyfetch to check more than one url at a time
+  * Avoid Deferred.cancel() induced CancelledErrors
+  * Add unit tests for ProxyFetchMonitoringProtocol
+  * Add minimal test cases for Skeleton and ProxyFetch
+  * Create MonitoringProtocolTestCase base class
+  * Implement kubernetes configuration observer (Bug: T192437)
+
+-- Valentin Gutierrez <vgutierrez@wikimedia.org>  Tue, 07 May 2019 15:54:19 +0200
+
 pybal (1.15.3) stretch-wikimedia; urgency=medium
   * First Debian stretch release (Bug: T177961)
   * Fix dummy metrics implementation (Bug: T190527)
