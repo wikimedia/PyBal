@@ -43,8 +43,7 @@ setup(
     ),
     requires=(
         'twisted',
-        'PyOpenSSL',
-        'treq',
+        'PyOpenSSL'
     ),
     tests_require=(
         'mock',
