@@ -1,3 +1,9 @@
+pybal (1.15.8) buster-wikimedia; urgency=medium
+
+  * Build for buster (T245984)
+
+ -- Valentin Gutierrez <vgutierrez@wikimedia.org>  Mon, 24 Feb 2020 11:06:04 +0000
+
 pybal (1.15.7) stretch-wikimedia; urgency=medium
 
   * Handle etcd 401 errors
