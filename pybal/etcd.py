@@ -119,7 +119,7 @@ class EtcdConfigurationObserver(ConfigurationObserver, HTTPClientFactory):
     protocol = EtcdClient
     scheme = 'https'
     timeout = 0
-    reconnectTimeout = 1
+    reconnectTimeout = 0.1
     followRedirect = False
     afterFoundGet = False
 

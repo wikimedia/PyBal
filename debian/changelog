@@ -1,3 +1,9 @@
+pybal (1.15.9) buster-wikimedia; urgency=medium
+
+  * Reduce reconnect timeout for etcd to 0.1 seconds (T264362)
+
+ -- Giuseppe Lavagetto <glavagetto@wikimedia.org>  Wed, 27 Jan 2021 12:46:38 +0100
+
 pybal (1.15.8) buster-wikimedia; urgency=medium
 
   * Build for buster (T245984)
